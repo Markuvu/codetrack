@@ -1,10 +1,12 @@
 import axios from "axios"
 import * as cheerio from "cheerio"
 
+const PROFILE_BASE = "https://www.codechef.com/users/"
+
 // CodeChef has no reliable official API, so we parse the public profile page.
 // Selectors can break when CodeChef changes its layout - fail loudly if so.
 export async function getCodeChefProfile(handle) {
-  const url = `https://www.codechef.com/users/${encodeURIComponent(handle)}`
+  const url = PROFILE_BASE + encodeURIComponent(handle)
   const { data: html } = await axios.get(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; CodeTrack/0.1)" },
     timeout: 15000,
