@@ -1,6 +1,7 @@
 import axios from "axios"
 
 const BASE = "https://codeforces.com/api"
+const CONTEST_URL_BASE = "https://codeforces.com/contests/"
 const MIN_INTERVAL_MS = 2100 // Codeforces allows at most 1 request per 2 seconds
 
 // Serialize all Codeforces calls through one queue so the rate limit is
@@ -62,6 +63,6 @@ export async function getCodeforcesContests() {
       name: c.name,
       startsAt: c.startTimeSeconds,
       durationSeconds: c.durationSeconds,
-      url: `https://codeforces.com/contests/${c.id}`,
+      url: CONTEST_URL_BASE + c.id,
     }))
 }
