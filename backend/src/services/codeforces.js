@@ -2,6 +2,7 @@ import axios from "axios"
 
 const BASE = "https://codeforces.com/api"
 const CONTEST_URL_BASE = "https://codeforces.com/contests/"
+const PROBLEM_URL_BASE = "https://codeforces.com/contest/"
 const MIN_INTERVAL_MS = 2100 // Codeforces allows at most 1 request per 2 seconds
 
 // Serialize all Codeforces calls through one queue so the rate limit is
@@ -50,6 +51,29 @@ export async function getCodeforcesProfile(handle) {
       newRating: r.newRating,
     })),
   }
+}
+
+/** Most recently solved problems, deduplicated - used for auto-flashcards. */
+export async function getCodeforcesRecentSolved(handle, limit = 20) {
+  const submissions = await cfGet("user.status", { handle, from: 1, count: 1000 })
+  const seen = new Set()
+  const problems = []
+  for (const sub of submissions) {
+    if (sub.verdict !== "OK" || !sub.problem || !sub.problem.contestId) continue
+    const key = `${sub.problem.contestId}-${sub.problem.index}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    problems.push({
+      id: key,
+      name: sub.problem.name,
+      rating: sub.problem.rating ?? null,
+      tags: sub.problem.tags ?? [],
+      solvedAt: sub.creationTimeSeconds,
+      url: PROBLEM_URL_BASE + sub.problem.contestId + "/problem/" + sub.problem.index,
+    })
+    if (problems.length >= limit) break
+  }
+  return problems
 }
 
 export async function getCodeforcesContests() {

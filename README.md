@@ -4,10 +4,11 @@ All your coding profiles, contest reminders, progress tracking & flashcards — 
 
 ## What it does
 
-- **Profiles hub** — track your Codeforces, LeetCode and CodeChef stats (rating, solved count, contest history) in one dashboard
+- **Profiles hub** — track Codeforces, LeetCode, CodeChef, AtCoder & GeeksforGeeks stats in one dashboard
 - **Contest calendar** — unified upcoming-contest list (via [CLIST](https://clist.by), with Codeforces-only fallback) with one-tap local notification reminders
-- **Flashcards** — spaced-repetition review (SM-2 algorithm) for problems and concepts, stored offline
-- **Progress tracking** — rating history from platform APIs; daily snapshots planned
+- **Progress tracking** — rating history graphs, daily stat snapshots, and solve streaks
+- **Flashcards** — FSRS spaced-repetition review for problems and concepts, stored offline, with auto-generated cards from your recent Codeforces solves
+- **Friend leaderboards** — compare rating & solved counts with friends
 
 ## Architecture
 
@@ -16,7 +17,10 @@ Mobile App (Flutter)  ──REST──▶  Backend (Node.js + Express)
                                     ├── Codeforces official API (throttled 1 req/2s)
                                     ├── LeetCode GraphQL (unofficial)
                                     ├── CodeChef profile scraper (cheerio)
+                                    ├── AtCoder history JSON + kenkoooo API
+                                    ├── GeeksforGeeks __NEXT_DATA__ parser
                                     ├── CLIST API (contests, all judges)
+                                    ├── Daily snapshot store (JSON file)
                                     └── In-memory TTL cache
 ```
 
@@ -57,20 +61,28 @@ By default the app talks to `http://10.0.2.2:3000` (Android emulator → your ma
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/profile/:platform/:handle` | Profile stats. Platforms: `codeforces`, `leetcode`, `codechef` |
+| `GET /api/profile/:platform/:handle` | Profile stats. Platforms: `codeforces`, `leetcode`, `codechef`, `atcoder`, `gfg` |
+| `GET /api/profiles?codeforces=a&leetcode=b` | Batch profile fetch |
 | `GET /api/contests` | Upcoming contests across platforms |
+| `GET /api/snapshots/:platform/:handle` | Daily progress snapshots (auto-recorded on fresh fetches) |
+| `GET /api/solved/codeforces/:handle?limit=20` | Recently solved problems (powers auto-flashcards) |
+| `GET /api/leaderboard?platform=codeforces&handles=a,b,c` | Friend leaderboard sorted by rating |
 | `GET /health` | Health check |
 
 ## Notes & fair use
 
-- Codeforces is the only official API here; LeetCode GraphQL and CodeChef scraping are unofficial — responses are cached for 6h to keep request volume minimal. Fetch only public profiles of users who connect their own handles.
+- Codeforces is the only official API here; LeetCode GraphQL, CodeChef/GFG scraping and the AtCoder history JSON are unofficial — responses are cached for 6h to keep request volume minimal. Fetch only public profiles of users who connect their own handles.
 - Get a free CLIST API key at [clist.by](https://clist.by/api/v4/doc/) for contests across all judges.
+- Snapshots are stored in `backend/data/snapshots.json` (git-ignored). Refresh profiles daily to build progress history.
 
 ## Roadmap
 
-- [ ] AtCoder + GeeksforGeeks fetchers
-- [ ] Daily stat snapshots → progress graphs & streaks
-- [ ] FSRS scheduler upgrade for flashcards
-- [ ] Auto-generated flashcards from solved problems
-- [ ] Friend leaderboards
-- [ ] Home-screen contest countdown widget
+- [x] Codeforces / LeetCode / CodeChef profile fetchers
+- [x] Unified contest list + local notification reminders
+- [x] AtCoder + GeeksforGeeks fetchers
+- [x] Daily stat snapshots → progress graphs & streaks
+- [x] FSRS scheduler for flashcards
+- [x] Auto-generated flashcards from solved problems (Codeforces)
+- [x] Friend leaderboards
+- [ ] Home-screen contest countdown widget (requires generated platform folders)
+- [ ] Server-side push notifications (FCM) & cloud sync

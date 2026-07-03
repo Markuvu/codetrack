@@ -3,6 +3,9 @@ node_modules/
 .env
 npm-debug.log*
 
+# Backend runtime data (snapshots)
+backend/data/
+
 # Flutter / Dart
 app/.dart_tool/
 app/.packages

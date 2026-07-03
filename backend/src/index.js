@@ -2,18 +2,36 @@ import "dotenv/config"
 import cors from "cors"
 import express from "express"
 import { cache } from "./cache.js"
+import { getAtCoderProfile } from "./services/atcoder.js"
 import { getUpcomingContests } from "./services/clist.js"
 import { getCodeChefProfile } from "./services/codechef.js"
-import { getCodeforcesProfile } from "./services/codeforces.js"
+import { getCodeforcesProfile, getCodeforcesRecentSolved } from "./services/codeforces.js"
+import { getGfgProfile } from "./services/gfg.js"
 import { getLeetCodeProfile } from "./services/leetcode.js"
+import { getSnapshots, recordSnapshot } from "./services/snapshots.js"
 
 const PROFILE_TTL_SECONDS = 6 * 60 * 60 // profiles change slowly; be gentle with sources
 const CONTESTS_TTL_SECONDS = 3 * 60 * 60
+const SOLVED_TTL_SECONDS = 60 * 60
 
 const PLATFORMS = {
   codeforces: getCodeforcesProfile,
   leetcode: getLeetCodeProfile,
   codechef: getCodeChefProfile,
+  atcoder: getAtCoderProfile,
+  gfg: getGfgProfile,
+}
+
+// Fetch a profile through the cache; every fresh fetch also records a daily
+// snapshot so the app can draw progress graphs and streaks over time.
+function fetchProfileCached(platform, handle) {
+  return cache.wrap(`profile:${platform}:${handle}`, PROFILE_TTL_SECONDS, async () => {
+    const profile = await PLATFORMS[platform](handle)
+    recordSnapshot(platform, handle, profile).catch((err) =>
+      console.error(`snapshot failed for ${platform}:${handle}:`, err.message),
+    )
+    return profile
+  })
 }
 
 const app = express()
@@ -25,17 +43,13 @@ app.get("/health", (_req, res) => res.json({ ok: true }))
 // Single profile: GET /api/profile/codeforces/tourist
 app.get("/api/profile/:platform/:handle", async (req, res) => {
   const { platform, handle } = req.params
-  const fetcher = PLATFORMS[platform]
-  if (!fetcher) {
+  if (!PLATFORMS[platform]) {
     return res.status(400).json({
       error: `Unsupported platform '${platform}'. Supported: ${Object.keys(PLATFORMS).join(", ")}`,
     })
   }
   try {
-    const data = await cache.wrap(`profile:${platform}:${handle}`, PROFILE_TTL_SECONDS, () =>
-      fetcher(handle),
-    )
-    res.json(data)
+    res.json(await fetchProfileCached(platform, handle))
   } catch (err) {
     res.status(502).json({ error: err.message })
   }
@@ -45,11 +59,7 @@ app.get("/api/profile/:platform/:handle", async (req, res) => {
 app.get("/api/profiles", async (req, res) => {
   const entries = Object.entries(req.query).filter(([platform]) => PLATFORMS[platform])
   const settled = await Promise.allSettled(
-    entries.map(([platform, handle]) =>
-      cache.wrap(`profile:${platform}:${handle}`, PROFILE_TTL_SECONDS, () =>
-        PLATFORMS[platform](String(handle)),
-      ),
-    ),
+    entries.map(([platform, handle]) => fetchProfileCached(platform, String(handle))),
   )
   res.json({
     profiles: settled.map((result, i) => ({
@@ -68,6 +78,61 @@ app.get("/api/contests", async (_req, res) => {
   } catch (err) {
     res.status(502).json({ error: err.message })
   }
+})
+
+// Daily progress snapshots (recorded automatically on fresh profile fetches)
+app.get("/api/snapshots/:platform/:handle", async (req, res) => {
+  const { platform, handle } = req.params
+  res.json({ snapshots: await getSnapshots(platform, handle) })
+})
+
+// Recently solved Codeforces problems - used for auto-generated flashcards
+app.get("/api/solved/codeforces/:handle", async (req, res) => {
+  const { handle } = req.params
+  const limit = Math.min(Number(req.query.limit) || 20, 100)
+  try {
+    const problems = await cache.wrap(
+      `solved:codeforces:${handle}:${limit}`,
+      SOLVED_TTL_SECONDS,
+      () => getCodeforcesRecentSolved(handle, limit),
+    )
+    res.json({ problems })
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
+// Friend leaderboard: GET /api/leaderboard?platform=codeforces&handles=a,b,c
+app.get("/api/leaderboard", async (req, res) => {
+  const platform = String(req.query.platform || "codeforces")
+  if (!PLATFORMS[platform]) {
+    return res.status(400).json({ error: `Unsupported platform '${platform}'` })
+  }
+  const handles = String(req.query.handles || "")
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean)
+  if (handles.length === 0) {
+    return res
+      .status(400)
+      .json({ error: "Provide handles as a comma-separated 'handles' query param" })
+  }
+  const settled = await Promise.allSettled(handles.map((h) => fetchProfileCached(platform, h)))
+  const leaderboard = settled
+    .map((result, i) =>
+      result.status === "fulfilled"
+        ? {
+            handle: handles[i],
+            rating: result.value.rating ?? null,
+            solvedCount: result.value.solvedCount ?? null,
+          }
+        : { handle: handles[i], rating: null, solvedCount: null, error: result.reason.message },
+    )
+    .sort(
+      (a, b) =>
+        (b.rating ?? -1) - (a.rating ?? -1) || (b.solvedCount ?? -1) - (a.solvedCount ?? -1),
+    )
+  res.json({ platform, leaderboard })
 })
 
 const port = process.env.PORT || 3000
