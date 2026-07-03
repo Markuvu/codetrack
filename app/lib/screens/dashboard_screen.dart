@@ -4,7 +4,7 @@ import '../models/profile.dart';
 import '../services/api_client.dart';
 import '../storage/app_store.dart';
 
-const kPlatforms = ['codeforces', 'leetcode', 'codechef'];
+const kPlatforms = ['codeforces', 'leetcode', 'codechef', 'atcoder', 'gfg'];
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -85,6 +85,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _refresh();
   }
 
+  String _displayName(String platform) {
+    switch (platform) {
+      case 'gfg':
+        return 'GeeksforGeeks';
+      case 'atcoder':
+        return 'AtCoder';
+      case 'leetcode':
+        return 'LeetCode';
+      case 'codechef':
+        return 'CodeChef';
+      case 'codeforces':
+        return 'Codeforces';
+      default:
+        return platform;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -119,7 +136,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (profile == null) {
       subtitle = '@$handle - loading...';
     } else {
-      final rating = profile.rating?.toString() ?? '-';
+      final rating = profile.rating?.toString() ??
+          (profile.raw['codingScore']?.toString() ?? '-');
       final solved = profile.solvedCount?.toString() ?? '-';
       subtitle = '@$handle  |  rating $rating  |  solved $solved';
     }
@@ -127,7 +145,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
-        title: Text(platform[0].toUpperCase() + platform.substring(1)),
+        title: Text(_displayName(platform)),
         subtitle: Text(
           subtitle,
           style: error != null ? const TextStyle(color: Colors.redAccent) : null,

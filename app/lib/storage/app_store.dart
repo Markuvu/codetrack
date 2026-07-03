@@ -9,6 +9,7 @@ import '../models/flashcard.dart';
 class AppStore {
   static const _handlesKey = 'handles';
   static const _cardsKey = 'flashcards';
+  static const _friendsKey = 'friends_codeforces';
 
   Future<Map<String, String>> loadHandles() async {
     final prefs = await SharedPreferences.getInstance();
@@ -37,5 +38,15 @@ class AppStore {
       _cardsKey,
       jsonEncode(cards.map((c) => c.toJson()).toList()),
     );
+  }
+
+  Future<List<String>> loadFriends() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_friendsKey) ?? [];
+  }
+
+  Future<void> saveFriends(List<String> friends) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_friendsKey, friends);
   }
 }

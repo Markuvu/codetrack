@@ -22,28 +22,46 @@ class ApiClient {
     await prefs.setString(_urlKey, url);
   }
 
-  Future<PlatformProfile> fetchProfile(String platform, String handle) async {
+  Future<Map<String, dynamic>> _getJson(String path,
+      {Duration timeout = const Duration(seconds: 30)}) async {
     final base = await baseUrl();
-    final res = await http
-        .get(Uri.parse('$base/api/profile/$platform/$handle'))
-        .timeout(const Duration(seconds: 30));
+    final res = await http.get(Uri.parse('$base$path')).timeout(timeout);
     if (res.statusCode != 200) {
-      throw Exception('Profile fetch failed (${res.statusCode})');
+      throw Exception('Request failed (${res.statusCode})');
     }
-    return PlatformProfile.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<PlatformProfile> fetchProfile(String platform, String handle) async {
+    return PlatformProfile.fromJson(await _getJson('/api/profile/$platform/$handle'));
   }
 
   Future<List<Contest>> fetchContests() async {
-    final base = await baseUrl();
-    final res = await http
-        .get(Uri.parse('$base/api/contests'))
-        .timeout(const Duration(seconds: 30));
-    if (res.statusCode != 200) {
-      throw Exception('Contest fetch failed (${res.statusCode})');
-    }
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final data = await _getJson('/api/contests');
     return (data['contests'] as List)
         .map((c) => Contest.fromJson(c as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSnapshots(
+      String platform, String handle) async {
+    final data = await _getJson('/api/snapshots/$platform/$handle');
+    return ((data['snapshots'] as List?) ?? []).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchRecentSolved(String handle,
+      {int limit = 20}) async {
+    final data = await _getJson('/api/solved/codeforces/$handle?limit=$limit',
+        timeout: const Duration(seconds: 60));
+    return ((data['problems'] as List?) ?? []).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchLeaderboard(
+      String platform, List<String> handles) async {
+    final joined = handles.join(',');
+    final data = await _getJson(
+        '/api/leaderboard?platform=$platform&handles=$joined',
+        timeout: const Duration(seconds: 120));
+    return ((data['leaderboard'] as List?) ?? []).cast<Map<String, dynamic>>();
   }
 }

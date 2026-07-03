@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'screens/contests_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/flashcards_screen.dart';
+import 'screens/leaderboard_screen.dart';
+import 'screens/progress_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/notification_service.dart';
 
@@ -43,7 +45,9 @@ class _HomeShellState extends State<HomeShell> {
   static const _screens = <Widget>[
     DashboardScreen(),
     ContestsScreen(),
+    ProgressScreen(),
     FlashcardsScreen(),
+    LeaderboardScreen(),
   ];
 
   @override
@@ -68,7 +72,9 @@ class _HomeShellState extends State<HomeShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profiles'),
           NavigationDestination(icon: Icon(Icons.emoji_events_outlined), label: 'Contests'),
-          NavigationDestination(icon: Icon(Icons.style_outlined), label: 'Flashcards'),
+          NavigationDestination(icon: Icon(Icons.show_chart), label: 'Progress'),
+          NavigationDestination(icon: Icon(Icons.style_outlined), label: 'Cards'),
+          NavigationDestination(icon: Icon(Icons.group_outlined), label: 'Friends'),
         ],
       ),
     );
