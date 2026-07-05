@@ -42,6 +42,23 @@ class ApiClient {
             timeout: const Duration(seconds: 60)));
   }
 
+  /// Timestamps of recently accepted solves, for the weekly-progress chart.
+  /// Returns null when the platform exposes no public submission history
+  /// (CodeChef, GFG) - callers fall back to snapshot deltas.
+  /// Asks for 8 days so local-timezone bucketing never misses the week edges.
+  Future<List<DateTime>?> fetchActivity(String platform, String handle,
+      {bool fresh = false}) async {
+    final suffix = fresh ? '&fresh=1' : '';
+    final data = await _getJson('/api/activity/$platform/$handle?days=8$suffix',
+        timeout: const Duration(seconds: 60));
+    if (data['supported'] != true) return null;
+    return ((data['solves'] as List?) ?? [])
+        .map((s) => DateTime.fromMillisecondsSinceEpoch(
+            ((s as Map)['at'] as num).toInt(),
+            isUtc: true))
+        .toList();
+  }
+
   Future<List<Contest>> fetchContests() async {
     final data = await _getJson('/api/contests');
     return (data['contests'] as List)

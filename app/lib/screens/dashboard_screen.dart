@@ -29,6 +29,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<String, PlatformProfile> _profiles = {};
   final Map<String, String> _errors = {};
   final Map<String, List<Map<String, dynamic>>> _snapshots = {};
+
+  /// Per-platform accepted-solve timestamps (Codeforces, LeetCode, AtCoder).
+  /// Real history covers the whole week even for handles linked mid-week;
+  /// platforms without it (CodeChef, GFG) fall back to snapshot deltas.
+  final Map<String, List<DateTime>> _activity = {};
+
   List<Contest> _contests = [];
   String? _userName;
   int _weeklyGoal = 50;
@@ -48,9 +54,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _refresh();
   }
 
-  /// [fresh] is set by pull-to-refresh: the backend then bypasses its 6h
-  /// profile cache (5-min cooldown) and records an up-to-date snapshot, so
-  /// today's weekly-progress bar reflects problems solved moments ago.
+  /// [fresh] is set by pull-to-refresh: the backend then bypasses its caches
+  /// (with short cooldowns), so a problem solved moments ago shows up in
+  /// today's weekly-progress bar right away.
   Future<void> _refresh({bool fresh = false}) async {
     setState(() => _loading = true);
     _userName = await AuthService.instance.name();
@@ -63,6 +69,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _errors.remove(entry.key);
         } catch (err) {
           _errors[entry.key] = 'Failed to load: $err';
+        }
+      }),
+      ..._handles.entries.map((entry) async {
+        try {
+          final solves = await _api.fetchActivity(entry.key, entry.value,
+              fresh: fresh);
+          if (solves != null) _activity[entry.key] = solves;
+        } catch (_) {
+          // Best-effort: keep previous data, or fall back to snapshot deltas.
         }
       }),
       () async {
@@ -116,6 +131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _profiles.remove(platform);
         _errors.remove(platform);
         _snapshots.remove(platform);
+        _activity.remove(platform);
       } else {
         _handles[platform] = handle;
       }
@@ -270,12 +286,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
-  /// Per-date solved deltas across all platforms, computed from consecutive
-  /// daily snapshots. A platform's first-ever snapshot contributes nothing
+  /// Per-date solved deltas from daily snapshots, for platforms without real
+  /// submission history. A platform's first-ever snapshot contributes nothing
   /// (no baseline), so linking a new handle doesn't spike the chart.
-  Map<String, int> _dailyDeltas() {
+  Map<String, int> _dailyDeltas({Set<String> excludePlatforms = const {}}) {
     final deltas = <String, int>{};
-    for (final list in _snapshots.values) {
+    for (final entry in _snapshots.entries) {
+      if (excludePlatforms.contains(entry.key)) continue;
+      final list = entry.value;
       for (var i = 1; i < list.length; i++) {
         final prev = list[i - 1]['solvedCount'];
         final cur = list[i]['solvedCount'];
@@ -289,16 +307,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return deltas;
   }
 
-  /// Solved count per day for the current week, Monday..Sunday.
+  /// Problems solved per day for the current week, Monday..Sunday.
+  /// Real per-solve history where available (bucketed in local time), plus
+  /// snapshot deltas for the remaining platforms.
   List<int> _weekValues() {
-    final deltas = _dailyDeltas();
     final now = DateTime.now();
     final monday = DateTime(now.year, now.month, now.day)
         .subtract(Duration(days: now.weekday - 1));
-    return [
-      for (var i = 0; i < 7; i++)
-        deltas[_dateKey(monday.add(Duration(days: i)))] ?? 0,
-    ];
+    final values = List<int>.filled(7, 0);
+
+    for (final solves in _activity.values) {
+      for (final at in solves) {
+        final local = at.toLocal();
+        final day = DateTime(local.year, local.month, local.day);
+        final i = day.difference(monday).inDays;
+        if (i >= 0 && i < 7) values[i] += 1;
+      }
+    }
+
+    final deltas = _dailyDeltas(excludePlatforms: _activity.keys.toSet());
+    for (var i = 0; i < 7; i++) {
+      values[i] += deltas[_dateKey(monday.add(Duration(days: i)))] ?? 0;
+    }
+    return values;
   }
 
   // --- UI -----------------------------------------------------------------
@@ -697,9 +728,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (total == 0) ...[
                   const SizedBox(height: 10),
                   Text(
-                    'Pull down to refresh after solving. Today\'s bar needs '
-                    'yesterday\'s snapshot as a baseline, so brand-new '
-                    'handles start counting from tomorrow.',
+                    'Codeforces, LeetCode and AtCoder count from your real '
+                    'submission history. CodeChef and GFG use daily '
+                    'snapshots, so they start counting a day after linking.',
                     style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                     textAlign: TextAlign.center,
                   ),

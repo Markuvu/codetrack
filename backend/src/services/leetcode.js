@@ -4,6 +4,12 @@ import axios from "axios"
 // website itself uses. Keep request volume low (responses are cached upstream).
 const GRAPHQL_URL = "https://leetcode.com/graphql"
 
+const HEADERS = {
+  "Content-Type": "application/json",
+  Referer: "https://leetcode.com",
+  "User-Agent": "Mozilla/5.0 (compatible; CodeTrack/0.1)",
+}
+
 const PROFILE_QUERY = `
 query userProfile($username: String!) {
   matchedUser(username: $username) {
@@ -23,14 +29,7 @@ export async function getLeetCodeProfile(username) {
   const { data } = await axios.post(
     GRAPHQL_URL,
     { query: PROFILE_QUERY, variables: { username } },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Referer: "https://leetcode.com",
-        "User-Agent": "Mozilla/5.0 (compatible; CodeTrack/0.1)",
-      },
-      timeout: 15000,
-    },
+    { headers: HEADERS, timeout: 15000 },
   )
 
   const user = data?.data?.matchedUser
@@ -52,4 +51,36 @@ export async function getLeetCodeProfile(username) {
     globalRanking: contest?.globalRanking ?? null,
     topPercentage: contest?.topPercentage ?? null,
   }
+}
+
+const RECENT_AC_QUERY = `
+query recentAc($username: String!, $limit: Int!) {
+  recentAcSubmissionList(username: $username, limit: $limit) {
+    titleSlug
+    timestamp
+  }
+}`
+
+/**
+ * Recent accepted solves with timestamps, deduplicated per problem (earliest
+ * AC kept). LeetCode only exposes the latest ~100 accepted submissions, which
+ * comfortably covers a week for most users. [{ id, at }] with `at` in epoch ms.
+ */
+export async function getLeetCodeRecentActivity(username, sinceMs) {
+  const { data } = await axios.post(
+    GRAPHQL_URL,
+    { query: RECENT_AC_QUERY, variables: { username, limit: 100 } },
+    { headers: HEADERS, timeout: 15000 },
+  )
+  const list = data?.data?.recentAcSubmissionList
+  if (!Array.isArray(list)) throw new Error(`LeetCode user '${username}' not found`)
+
+  const earliest = new Map()
+  for (const sub of list) {
+    const at = Number(sub.timestamp) * 1000
+    if (!Number.isFinite(at) || at < sinceMs) continue
+    const prev = earliest.get(sub.titleSlug)
+    if (prev === undefined || at < prev) earliest.set(sub.titleSlug, at)
+  }
+  return [...earliest.entries()].map(([id, at]) => ({ id, at }))
 }

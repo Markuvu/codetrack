@@ -2,18 +2,24 @@ import "dotenv/config"
 import cors from "cors"
 import express from "express"
 import { cache } from "./cache.js"
-import { getAtCoderProfile } from "./services/atcoder.js"
+import { getAtCoderProfile, getAtCoderRecentActivity } from "./services/atcoder.js"
 import { getUpcomingContests } from "./services/clist.js"
 import { getCodeChefProfile } from "./services/codechef.js"
-import { getCodeforcesProfile, getCodeforcesRecentSolved } from "./services/codeforces.js"
+import {
+  getCodeforcesProfile,
+  getCodeforcesRecentActivity,
+  getCodeforcesRecentSolved,
+} from "./services/codeforces.js"
 import { getGfgProfile } from "./services/gfg.js"
-import { getLeetCodeProfile } from "./services/leetcode.js"
+import { getLeetCodeProfile, getLeetCodeRecentActivity } from "./services/leetcode.js"
 import { getSnapshots, recordSnapshot } from "./services/snapshots.js"
 
 const PROFILE_TTL_SECONDS = 6 * 60 * 60 // profiles change slowly; be gentle with sources
 const FRESH_COOLDOWN_SECONDS = 5 * 60 // forced refresh still waits 5 min between real fetches
 const CONTESTS_TTL_SECONDS = 3 * 60 * 60
 const SOLVED_TTL_SECONDS = 60 * 60
+const ACTIVITY_TTL_SECONDS = 10 * 60 // per-solve history powers "just solved" updates
+const ACTIVITY_FRESH_COOLDOWN_SECONDS = 60
 
 const PLATFORMS = {
   codeforces: getCodeforcesProfile,
@@ -21,6 +27,14 @@ const PLATFORMS = {
   codechef: getCodeChefProfile,
   atcoder: getAtCoderProfile,
   gfg: getGfgProfile,
+}
+
+// Platforms with public per-submission history. CodeChef and GFG have none,
+// so the app falls back to daily snapshot deltas for those.
+const ACTIVITY_PLATFORMS = {
+  codeforces: getCodeforcesRecentActivity,
+  leetcode: getLeetCodeRecentActivity,
+  atcoder: getAtCoderRecentActivity,
 }
 
 // Fetch a profile through the cache; every fresh fetch also records a daily
@@ -82,6 +96,34 @@ app.get("/api/profiles", async (req, res) => {
       ...(result.status === "fulfilled" ? { data: result.value } : { error: result.reason.message }),
     })),
   })
+})
+
+// Per-solve activity with timestamps for the weekly-progress chart:
+// GET /api/activity/:platform/:handle?days=8[&fresh=1]
+// Covers the whole window even for handles linked mid-week. Platforms without
+// public history return { supported: false } and the app uses snapshot deltas.
+app.get("/api/activity/:platform/:handle", async (req, res) => {
+  const { platform, handle } = req.params
+  if (!PLATFORMS[platform]) {
+    return res.status(400).json({ error: `Unsupported platform '${platform}'` })
+  }
+  const fetchActivity = ACTIVITY_PLATFORMS[platform]
+  if (!fetchActivity) {
+    return res.json({ supported: false, solves: [] })
+  }
+  const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 31)
+  const sinceMs = Date.now() - days * 24 * 60 * 60 * 1000
+  try {
+    const solves = await cache.wrap(
+      `activity:${platform}:${handle}:${days}`,
+      ACTIVITY_TTL_SECONDS,
+      () => fetchActivity(handle, sinceMs),
+      wantsFresh(req) ? { maxAgeSeconds: ACTIVITY_FRESH_COOLDOWN_SECONDS } : undefined,
+    )
+    res.json({ supported: true, solves })
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
 })
 
 // Upcoming contests across platforms

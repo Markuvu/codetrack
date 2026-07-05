@@ -10,9 +10,9 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 ## Dashboard
 
-- [ ] Day-streak, submissions and AC-rate tiles (needs a submissions-history endpoint)
-- [ ] Recent Activity feed (latest accepted submissions across platforms)
-- [x] Weekly goal ring + weekly solved chart - shipped using daily snapshot deltas; pull-to-refresh forces a fresh profile fetch (`fresh=1`, 5-min cooldown) so today's bar updates same-day. Accuracy improves once a real per-submission history endpoint exists
+- [ ] Day-streak, submissions and AC-rate tiles (can now reuse `/api/activity` for CF/LC/AtCoder)
+- [ ] Recent Activity feed (latest accepted submissions across platforms - `/api/activity` already has the data for CF/LC/AtCoder)
+- [x] Weekly goal ring + weekly solved chart - CF/LC/AtCoder use real per-submission history via `/api/activity` (local-timezone day buckets, full week even for handles linked mid-week); CodeChef/GFG fall back to daily snapshot deltas
 
 ## Contests & reminders
 
@@ -22,7 +22,7 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 ## Flashcards
 
-- [ ] LeetCode solved-problem import (needs per-problem history from GraphQL)
+- [ ] LeetCode solved-problem import (`recentAcSubmissionList` is now wired up in `leetcode.js` - reuse it)
 - [ ] Deck sharing/export
 
 ## Misc
@@ -35,5 +35,5 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 - Reminders created before commit `3987f229` fire but don't appear in the manage list
 - Recent-solved (flashcard seeding) is Codeforces-only
-- Weekly Progress needs a prior-day snapshot as a baseline, so a freshly linked handle starts counting from its second day; snapshot dates are UTC so late-night solves can land on the neighboring bar
+- Weekly Progress: CodeChef and GFG have no public submission history, so their bars come from daily snapshot deltas (need a prior-day baseline, UTC dates); LeetCode history is capped at the latest ~100 accepted submissions (only matters if you solve 100+ in a week)
 - Snapshots live on the backend's disk - lost if the backend host is wiped (until a real DB)
