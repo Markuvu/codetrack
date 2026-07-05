@@ -94,6 +94,35 @@ export async function getCodeforcesRecentActivity(handle, sinceMs) {
   return [...earliest.entries()].map(([id, at]) => ({ id, at }))
 }
 
+/**
+ * ALL submissions per UTC day since sinceMs, for the unified heatmap.
+ * Counts every submission (any verdict), matching how the platforms' own
+ * heatmaps count activity. Pages through user.status and stops as soon as
+ * submissions older than the window appear. Returns { "yyyy-mm-dd": count }.
+ */
+export async function getCodeforcesHeatmap(handle, sinceMs) {
+  const days = {}
+  const pageSize = 2000
+  let from = 1
+  for (let page = 0; page < 3; page++) {
+    const submissions = await cfGet("user.status", { handle, from, count: pageSize })
+    if (!Array.isArray(submissions) || submissions.length === 0) break
+    let reachedOlder = false
+    for (const sub of submissions) {
+      const at = (sub.creationTimeSeconds ?? 0) * 1000
+      if (at < sinceMs) {
+        reachedOlder = true
+        continue
+      }
+      const date = new Date(at).toISOString().slice(0, 10)
+      days[date] = (days[date] ?? 0) + 1
+    }
+    if (reachedOlder || submissions.length < pageSize) break
+    from += pageSize
+  }
+  return days
+}
+
 export async function getCodeforcesContests() {
   const contests = await cfGet("contest.list", {})
   return contests

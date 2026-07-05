@@ -59,6 +59,20 @@ class ApiClient {
         .toList();
   }
 
+  /// Per-day submission counts for the unified activity heatmap:
+  /// 'yyyy-MM-dd' (UTC date) -> submissions that day, covering ~1 year.
+  /// Returns null when the platform has no public per-day history (GFG).
+  Future<Map<String, int>?> fetchHeatmap(String platform, String handle,
+      {bool fresh = false}) async {
+    final suffix = fresh ? '&fresh=1' : '';
+    final data = await _getJson(
+        '/api/heatmap/$platform/$handle?days=365$suffix',
+        timeout: const Duration(seconds: 60));
+    if (data['supported'] != true) return null;
+    return ((data['days'] as Map?) ?? {})
+        .map((k, v) => MapEntry('$k', ((v as num?) ?? 0).toInt()));
+  }
+
   Future<List<Contest>> fetchContests() async {
     final data = await _getJson('/api/contests');
     return (data['contests'] as List)

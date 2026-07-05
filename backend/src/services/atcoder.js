@@ -71,3 +71,28 @@ export async function getAtCoderRecentActivity(handle, sinceMs) {
   }
   return [...earliest.entries()].map(([id, at]) => ({ id, at }))
 }
+
+/**
+ * ALL submissions per UTC day since sinceMs, for the unified heatmap.
+ * kenkoooo returns at most ~500 submissions per request, so keep paging with
+ * from_second until a short page comes back. Returns { "yyyy-mm-dd": count }.
+ */
+export async function getAtCoderHeatmap(handle, sinceMs) {
+  const days = {}
+  let fromSecond = Math.floor(sinceMs / 1000)
+  for (let page = 0; page < 10; page++) {
+    const { data } = await axios.get(SUBMISSIONS_URL, {
+      params: { user: handle, from_second: fromSecond },
+      headers: UA,
+      timeout: 15000,
+    })
+    if (!Array.isArray(data) || data.length === 0) break
+    for (const sub of data) {
+      const date = new Date(sub.epoch_second * 1000).toISOString().slice(0, 10)
+      days[date] = (days[date] ?? 0) + 1
+    }
+    if (data.length < 500) break
+    fromSecond = data[data.length - 1].epoch_second + 1
+  }
+  return days
+}

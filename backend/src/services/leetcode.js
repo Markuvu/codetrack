@@ -106,3 +106,43 @@ export async function getLeetCodeRecentActivity(username, sinceMs) {
   }
   return [...earliest.entries()].map(([id, at]) => ({ id, at }))
 }
+
+const CALENDAR_QUERY = `
+query userCalendar($username: String!) {
+  matchedUser(username: $username) {
+    userCalendar { submissionCalendar }
+  }
+}`
+
+/**
+ * Per-day submission counts for the unified heatmap. LeetCode conveniently
+ * exposes its own contribution calendar: a JSON string mapping UTC-midnight
+ * epoch seconds -> submission count for roughly the past year.
+ * Returns { "yyyy-mm-dd": count }.
+ */
+export async function getLeetCodeHeatmap(username) {
+  const { data } = await axios.post(
+    GRAPHQL_URL,
+    { query: CALENDAR_QUERY, variables: { username } },
+    { headers: HEADERS, timeout: 15000 },
+  )
+  const calendar = data?.data?.matchedUser?.userCalendar?.submissionCalendar
+  if (typeof calendar !== "string") {
+    throw new Error(`LeetCode user '${username}' not found`)
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(calendar)
+  } catch {
+    throw new Error("LeetCode submission calendar is not valid JSON")
+  }
+  const days = {}
+  for (const [epoch, count] of Object.entries(parsed)) {
+    const at = Number(epoch) * 1000
+    const n = Number(count)
+    if (!Number.isFinite(at) || !Number.isFinite(n) || n <= 0) continue
+    const date = new Date(at).toISOString().slice(0, 10)
+    days[date] = (days[date] ?? 0) + n
+  }
+  return days
+}

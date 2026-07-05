@@ -2,16 +2,25 @@ import "dotenv/config"
 import cors from "cors"
 import express from "express"
 import { cache } from "./cache.js"
-import { getAtCoderProfile, getAtCoderRecentActivity } from "./services/atcoder.js"
+import {
+  getAtCoderHeatmap,
+  getAtCoderProfile,
+  getAtCoderRecentActivity,
+} from "./services/atcoder.js"
 import { getUpcomingContests } from "./services/clist.js"
 import { getCodeChefProfile, getCodeChefRecentActivity } from "./services/codechef.js"
 import {
+  getCodeforcesHeatmap,
   getCodeforcesProfile,
   getCodeforcesRecentActivity,
   getCodeforcesRecentSolved,
 } from "./services/codeforces.js"
 import { getGfgProfile } from "./services/gfg.js"
-import { getLeetCodeProfile, getLeetCodeRecentActivity } from "./services/leetcode.js"
+import {
+  getLeetCodeHeatmap,
+  getLeetCodeProfile,
+  getLeetCodeRecentActivity,
+} from "./services/leetcode.js"
 import { getSnapshots, recordSnapshot } from "./services/snapshots.js"
 
 const PROFILE_TTL_SECONDS = 6 * 60 * 60 // profiles change slowly; be gentle with sources
@@ -20,6 +29,8 @@ const CONTESTS_TTL_SECONDS = 3 * 60 * 60
 const SOLVED_TTL_SECONDS = 60 * 60
 const ACTIVITY_TTL_SECONDS = 10 * 60 // per-solve history powers "just solved" updates
 const ACTIVITY_FRESH_COOLDOWN_SECONDS = 60
+const HEATMAP_TTL_SECONDS = 6 * 60 * 60 // a year of history changes slowly
+const HEATMAP_FRESH_COOLDOWN_SECONDS = 5 * 60
 
 const PLATFORMS = {
   codeforces: getCodeforcesProfile,
@@ -57,6 +68,31 @@ function fetchProfileCached(platform, handle, { fresh = false } = {}) {
     },
     fresh ? { maxAgeSeconds: FRESH_COOLDOWN_SECONDS } : undefined,
   )
+}
+
+// Per-day submission counts (UTC dates) for the unified heatmap.
+// Codeforces/AtCoder are counted from raw submission lists, LeetCode ships
+// its own ready-made calendar, and CodeChef's heatmap is already extracted
+// by the profile scrape (so it reuses the cached profile - note its dates
+// come from CodeChef in IST rather than UTC). GFG has no public per-day
+// history, so it is the one platform missing from the merged view.
+const HEATMAP_PLATFORMS = {
+  codeforces: getCodeforcesHeatmap,
+  leetcode: (handle) => getLeetCodeHeatmap(handle),
+  codechef: async (handle, sinceMs) => {
+    const profile = await fetchProfileCached("codechef", handle)
+    const days = {}
+    for (const entry of profile.heatmap ?? []) {
+      const date = String(entry.date ?? "").slice(0, 10)
+      const count = Number(entry.value ?? entry.submissions ?? 0)
+      if (!date || !Number.isFinite(count) || count <= 0) continue
+      const at = Date.parse(date + "T00:00:00Z")
+      if (Number.isFinite(at) && at < sinceMs) continue
+      days[date] = (days[date] ?? 0) + count
+    }
+    return days
+  },
+  atcoder: getAtCoderHeatmap,
 }
 
 function wantsFresh(req) {
@@ -124,6 +160,33 @@ app.get("/api/activity/:platform/:handle", async (req, res) => {
       wantsFresh(req) ? { maxAgeSeconds: ACTIVITY_FRESH_COOLDOWN_SECONDS } : undefined,
     )
     res.json({ supported: true, solves })
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
+// Unified heatmap source: GET /api/heatmap/:platform/:handle?days=365[&fresh=1]
+// Returns { supported, days: { "yyyy-mm-dd": submissionCount } } with UTC
+// dates. The app merges every linked platform's map into one calendar.
+app.get("/api/heatmap/:platform/:handle", async (req, res) => {
+  const { platform, handle } = req.params
+  if (!PLATFORMS[platform]) {
+    return res.status(400).json({ error: `Unsupported platform '${platform}'` })
+  }
+  const fetchHeatmap = HEATMAP_PLATFORMS[platform]
+  if (!fetchHeatmap) {
+    return res.json({ supported: false, days: {} })
+  }
+  const daysBack = Math.min(Math.max(Number(req.query.days) || 365, 1), 366)
+  const sinceMs = Date.now() - daysBack * 24 * 60 * 60 * 1000
+  try {
+    const days = await cache.wrap(
+      `heatmap:${platform}:${handle}:${daysBack}`,
+      HEATMAP_TTL_SECONDS,
+      () => fetchHeatmap(handle, sinceMs),
+      wantsFresh(req) ? { maxAgeSeconds: HEATMAP_FRESH_COOLDOWN_SECONDS } : undefined,
+    )
+    res.json({ supported: true, days })
   } catch (err) {
     res.status(502).json({ error: err.message })
   }
