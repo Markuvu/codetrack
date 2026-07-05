@@ -102,6 +102,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Some platforms have no contest rating; show their preferred metric name.
+  String _metricLabel(String platform) {
+    switch (platform) {
+      case 'gfg':
+        return 'coding score';
+      default:
+        return 'rating';
+    }
+  }
+
+  String _metricValue(String platform, PlatformProfile profile) {
+    switch (platform) {
+      case 'gfg':
+        return profile.raw['codingScore']?.toString() ?? '-';
+      default:
+        return profile.rating?.toString() ?? '-';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -136,10 +155,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (profile == null) {
       subtitle = '@$handle - loading...';
     } else {
-      final rating = profile.rating?.toString() ??
-          (profile.raw['codingScore']?.toString() ?? '-');
+      final metric = _metricValue(platform, profile);
       final solved = profile.solvedCount?.toString() ?? '-';
-      subtitle = '@$handle  |  rating $rating  |  solved $solved';
+      subtitle = '@$handle  |  ${_metricLabel(platform)} $metric  |  solved $solved';
     }
 
     return Card(
