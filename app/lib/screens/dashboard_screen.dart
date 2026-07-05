@@ -53,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final handle = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('$platform handle'),
+        title: Text('${_displayName(platform)} handle'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -102,6 +102,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Color _color(String platform) {
+    switch (platform) {
+      case 'codeforces':
+        return const Color(0xFF5C9DFF);
+      case 'leetcode':
+        return const Color(0xFFFFA116);
+      case 'codechef':
+        return const Color(0xFFC5854A);
+      case 'atcoder':
+        return const Color(0xFFB0BEC5);
+      case 'gfg':
+        return const Color(0xFF4CAF50);
+      default:
+        return const Color(0xFF9E9E9E);
+    }
+  }
+
   // Some platforms have no contest rating; show their preferred metric name.
   String _metricLabel(String platform) {
     switch (platform) {
@@ -121,8 +138,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Extra per-platform stats surfaced from the backend response.
+  List<String> _extraStats(String platform, PlatformProfile profile) {
+    final raw = profile.raw;
+    final stats = <String>[];
+    switch (platform) {
+      case 'codeforces':
+        if (raw['rank'] != null) stats.add('${raw['rank']}');
+        if (raw['maxRating'] != null) stats.add('max ${raw['maxRating']}');
+        if (raw['contestsAttended'] != null) {
+          stats.add('${raw['contestsAttended']} contests');
+        }
+        break;
+      case 'leetcode':
+        final byDiff = raw['solvedByDifficulty'];
+        if (byDiff is Map) {
+          stats.add(
+              'E ${byDiff['easy'] ?? 0} | M ${byDiff['medium'] ?? 0} | H ${byDiff['hard'] ?? 0}');
+        }
+        if (raw['globalRanking'] != null) {
+          stats.add('global #${raw['globalRanking']}');
+        }
+        if (raw['topPercentage'] != null) {
+          stats.add('top ${raw['topPercentage']}%');
+        }
+        break;
+      case 'codechef':
+        if (raw['stars'] != null) stats.add('${raw['stars']}');
+        if (raw['maxRating'] != null) stats.add('max ${raw['maxRating']}');
+        break;
+      case 'atcoder':
+        if (raw['maxRating'] != null) stats.add('max ${raw['maxRating']}');
+        if (raw['contestsAttended'] != null) {
+          stats.add('${raw['contestsAttended']} contests');
+        }
+        break;
+      case 'gfg':
+        if (raw['instituteRank'] != null) {
+          stats.add('institute #${raw['instituteRank']}');
+        }
+        final streak = raw['longestStreak'];
+        if (streak != null && streak != 0) stats.add('streak $streak');
+        break;
+    }
+    return stats;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final totalSolved = _profiles.values
+        .fold<int>(0, (sum, p) => sum + (p.solvedCount ?? 0));
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
@@ -130,10 +195,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.all(12),
         children: [
           if (_loading) const LinearProgressIndicator(),
+          if (_handles.isNotEmpty) _summaryCard(totalSolved),
           for (final platform in kPlatforms) _platformCard(platform),
           const SizedBox(height: 8),
           Text(
-            'Pull down to refresh. Stats are cached on the backend for 6 hours.',
+            'Tap a card to set its handle. Pull down to refresh.\n'
+            'Stats are cached on the backend for 6 hours.',
             style: Theme.of(context).textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
@@ -142,34 +209,152 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _summaryCard(int totalSolved) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      color: theme.colorScheme.primaryContainer.withOpacity(0.35),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Total problems solved',
+                      style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$totalSolved',
+                    style: theme.textTheme.headlineMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '${_handles.length} platform${_handles.length == 1 ? '' : 's'} linked',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _platformCard(String platform) {
     final handle = _handles[platform];
     final profile = _profiles[platform];
     final error = _errors[platform];
-
-    final String subtitle;
-    if (handle == null) {
-      subtitle = 'Tap to add your handle';
-    } else if (error != null) {
-      subtitle = error;
-    } else if (profile == null) {
-      subtitle = '@$handle - loading...';
-    } else {
-      final metric = _metricValue(platform, profile);
-      final solved = profile.solvedCount?.toString() ?? '-';
-      subtitle = '@$handle  |  ${_metricLabel(platform)} $metric  |  solved $solved';
-    }
+    final color = _color(platform);
+    final theme = Theme.of(context);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListTile(
-        title: Text(_displayName(platform)),
-        subtitle: Text(
-          subtitle,
-          style: error != null ? const TextStyle(color: Colors.redAccent) : null,
-        ),
-        trailing: const Icon(Icons.edit_outlined),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () => _editHandle(platform),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withOpacity(0.18),
+                foregroundColor: color,
+                child: Text(
+                  _displayName(platform)[0],
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _displayName(platform),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        if (handle != null)
+                          Text('@$handle', style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (handle == null)
+                      Text('Tap to add your handle',
+                          style: theme.textTheme.bodySmall)
+                    else if (error != null)
+                      Text(
+                        error,
+                        style: const TextStyle(
+                            color: Colors.redAccent, fontSize: 12),
+                      )
+                    else if (profile == null)
+                      Text('Loading...', style: theme.textTheme.bodySmall)
+                    else ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _metricValue(platform, profile),
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 3),
+                            child: Text(
+                              _metricLabel(platform),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'solved ${profile.solvedCount ?? '-'}',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                        ],
+                      ),
+                      if (_extraStats(platform, profile).isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final stat in _extraStats(platform, profile))
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: theme
+                                      .colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  stat,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

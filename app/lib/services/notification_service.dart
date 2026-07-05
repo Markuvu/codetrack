@@ -26,20 +26,32 @@ class NotificationService {
         ?.requestNotificationsPermission();
   }
 
-  /// Returns true if a reminder was scheduled, false if unsupported (web)
-  /// or the contest starts too soon.
-  Future<bool> scheduleContestReminder(
+  /// Stable notification id for a contest + lead-time combination, so the
+  /// same reminder can be replaced or cancelled later.
+  int reminderId(Contest contest, Duration before) =>
+      ('${contest.id}@${before.inMinutes}').hashCode & 0x7fffffff;
+
+  String _leadText(Duration d) {
+    if (d.inDays >= 1) return '${d.inDays} day${d.inDays == 1 ? '' : 's'}';
+    if (d.inHours >= 1) return '${d.inHours} hour${d.inHours == 1 ? '' : 's'}';
+    return '${d.inMinutes} minutes';
+  }
+
+  /// Schedules a reminder. Returns the notification id, or null when
+  /// unsupported (web) or the notify time is already in the past.
+  Future<int?> scheduleContestReminder(
     Contest contest, {
     Duration before = const Duration(minutes: 30),
   }) async {
-    if (kIsWeb) return false;
+    if (kIsWeb) return null;
     final when = contest.start.subtract(before);
-    if (when.isBefore(DateTime.now())) return false;
+    if (when.isBefore(DateTime.now())) return null;
 
+    final id = reminderId(contest, before);
     await _plugin.zonedSchedule(
-      contest.id.hashCode,
+      id,
       '${contest.name} starts soon!',
-      '${contest.platform} contest begins in ${before.inMinutes} minutes.',
+      '${contest.platform} contest begins in ${_leadText(before)}.',
       tz.TZDateTime.from(when, tz.local),
       const NotificationDetails(
         android: AndroidNotificationDetails(
@@ -55,6 +67,11 @@ class NotificationService {
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
-    return true;
+    return id;
+  }
+
+  Future<void> cancel(int id) async {
+    if (kIsWeb) return;
+    await _plugin.cancel(id);
   }
 }

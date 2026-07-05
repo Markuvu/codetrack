@@ -9,6 +9,7 @@ import '../models/flashcard.dart';
 class AppStore {
   static const _handlesKey = 'handles';
   static const _cardsKey = 'flashcards';
+  static const _remindersKey = 'scheduled_reminders';
 
   Future<Map<String, String>> loadHandles() async {
     final prefs = await SharedPreferences.getInstance();
@@ -51,5 +52,21 @@ class AppStore {
       [String platform = 'codeforces']) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('friends_$platform', friends);
+  }
+
+  /// Scheduled contest reminders, so the user can review and cancel them.
+  /// Each entry: notifId, contestName, platform, startMs, notifyAtMs.
+  Future<List<Map<String, dynamic>>> loadReminders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_remindersKey);
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  Future<void> saveReminders(List<Map<String, dynamic>> reminders) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_remindersKey, jsonEncode(reminders));
   }
 }

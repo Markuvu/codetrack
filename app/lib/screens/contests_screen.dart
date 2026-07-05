@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/contest.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
+import '../storage/app_store.dart';
 
 class ContestsScreen extends StatefulWidget {
   const ContestsScreen({super.key});
@@ -14,11 +15,19 @@ class ContestsScreen extends StatefulWidget {
 }
 
 class _ContestsScreenState extends State<ContestsScreen> {
-  static const _reminderBefore = Duration(minutes: 30);
+  static const _leadOptions = [
+    Duration(minutes: 10),
+    Duration(minutes: 30),
+    Duration(hours: 1),
+    Duration(days: 1),
+  ];
 
   final _api = ApiClient();
+  final _store = AppStore();
   late Future<List<Contest>> _future;
   String? _filter; // normalized platform key; null = show all
+
+  final _dateFormat = DateFormat('EEE, d MMM  HH:mm');
 
   @override
   void initState() {
@@ -31,7 +40,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
     await _future;
   }
 
-  // --- platform helpers -----------------------------------------------
+  // --- platform helpers -------------------------------------------------
 
   String _key(String platform) {
     final p = platform.toLowerCase();
@@ -88,24 +97,143 @@ class _ContestsScreenState extends State<ContestsScreen> {
     return 'in ${minutes}m';
   }
 
-  // --- reminder ---------------------------------------------------------
+  // --- reminders ---------------------------------------------------------
 
-  Future<void> _setReminder(Contest contest, DateFormat dateFormat) async {
-    final scheduled = await NotificationService.instance
-        .scheduleContestReminder(contest, before: _reminderBefore);
+  String _leadLabel(Duration d) {
+    if (d.inDays >= 1) return '${d.inDays} day before';
+    if (d.inHours >= 1) return '${d.inHours} hour before';
+    return '${d.inMinutes} min before';
+  }
+
+  Future<void> _pickReminder(Contest contest) async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Reminders are not supported in the browser - use the Android app.'),
+        ),
+      );
+      return;
+    }
+    final before = await showModalBottomSheet<Duration>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                'Remind me about "${contest.name}"',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            for (final d in _leadOptions)
+              ListTile(
+                leading: const Icon(Icons.alarm),
+                title: Text(_leadLabel(d)),
+                enabled: contest.start.subtract(d).isAfter(DateTime.now()),
+                onTap: () => Navigator.pop(context, d),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (before == null) return;
+    await _setReminder(contest, before);
+  }
+
+  Future<void> _setReminder(Contest contest, Duration before) async {
+    final id = await NotificationService.instance
+        .scheduleContestReminder(contest, before: before);
+    if (!mounted) return;
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'That reminder time has already passed - pick a shorter lead time.'),
+        ),
+      );
+      return;
+    }
+
+    final reminders = await _store.loadReminders();
+    reminders.removeWhere((r) => r['notifId'] == id);
+    reminders.add({
+      'notifId': id,
+      'contestName': contest.name,
+      'platform': _label(_key(contest.platform)),
+      'startMs': contest.start.millisecondsSinceEpoch,
+      'notifyAtMs': contest.start.subtract(before).millisecondsSinceEpoch,
+    });
+    await _store.saveReminders(reminders);
+
     if (!mounted) return;
     final notifyAt =
-        dateFormat.format(contest.start.subtract(_reminderBefore).toLocal());
+        _dateFormat.format(contest.start.subtract(before).toLocal());
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 5),
         content: Text(
-          scheduled
-              ? 'Reminder set - notification on $notifyAt '
-                  '(${_reminderBefore.inMinutes} min before start).'
-              : kIsWeb
-                  ? 'Reminders are not supported in the browser - use the Android app.'
-                  : 'Contest starts in less than ${_reminderBefore.inMinutes} minutes - too late to set this reminder.',
+          'Reminder set - notification on $notifyAt (${_leadLabel(before)} start).',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showReminders() async {
+    final all = await _store.loadReminders();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final upcoming = all.where((r) => (r['notifyAtMs'] as num) > now).toList()
+      ..sort((a, b) => (a['notifyAtMs'] as num).compareTo(b['notifyAtMs'] as num));
+    if (upcoming.length != all.length) await _store.saveReminders(upcoming);
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: upcoming.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'No scheduled reminders.\nTap the bell on a contest to add one.',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    const ListTile(
+                      title: Text(
+                        'Scheduled reminders',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    for (final r in List.of(upcoming))
+                      ListTile(
+                        leading: const Icon(Icons.alarm),
+                        title: Text('${r['contestName']}'),
+                        subtitle: Text(
+                          '${r['platform']}  |  notifies '
+                          '${_dateFormat.format(DateTime.fromMillisecondsSinceEpoch((r['notifyAtMs'] as num).toInt()))}',
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Cancel reminder',
+                          onPressed: () async {
+                            await NotificationService.instance
+                                .cancel((r['notifId'] as num).toInt());
+                            upcoming.remove(r);
+                            await _store.saveReminders(upcoming);
+                            setSheetState(() {});
+                          },
+                        ),
+                      ),
+                  ],
+                ),
         ),
       ),
     );
@@ -115,7 +243,6 @@ class _ContestsScreenState extends State<ContestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('EEE, d MMM  HH:mm');
     return FutureBuilder<List<Contest>>(
       future: _future,
       builder: (context, snapshot) {
@@ -155,7 +282,6 @@ class _ContestsScreenState extends State<ContestsScreen> {
           );
         }
 
-        // Build the filter chip list from the platforms actually present.
         final keys = <String>[];
         for (final c in contests) {
           final k = _key(c.platform);
@@ -167,35 +293,48 @@ class _ContestsScreenState extends State<ContestsScreen> {
 
         return Column(
           children: [
-            SizedBox(
-              height: 56,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                children: [
-                  FilterChip(
-                    label: Text('All (${contests.length})'),
-                    selected: _filter == null,
-                    onSelected: (_) => setState(() => _filter = null),
-                  ),
-                  for (final k in keys) ...[
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      avatar: CircleAvatar(
-                        backgroundColor: _color(k),
-                        radius: 6,
-                      ),
-                      label: Text(
-                        '${_label(k)} '
-                        '(${contests.where((c) => _key(c.platform) == k).length})',
-                      ),
-                      selected: _filter == k,
-                      onSelected: (selected) =>
-                          setState(() => _filter = selected ? k : null),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      children: [
+                        FilterChip(
+                          label: Text('All (${contests.length})'),
+                          selected: _filter == null,
+                          onSelected: (_) => setState(() => _filter = null),
+                        ),
+                        for (final k in keys) ...[
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            avatar: CircleAvatar(
+                              backgroundColor: _color(k),
+                              radius: 6,
+                            ),
+                            label: Text(
+                              '${_label(k)} '
+                              '(${contests.where((c) => _key(c.platform) == k).length})',
+                            ),
+                            selected: _filter == k,
+                            onSelected: (selected) => setState(
+                                () => _filter = selected ? k : null),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                ],
-              ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_notifications_outlined),
+                  tooltip: 'Manage reminders',
+                  onPressed: _showReminders,
+                ),
+                const SizedBox(width: 4),
+              ],
             ),
             Expanded(
               child: RefreshIndicator(
@@ -204,8 +343,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                   itemCount: visible.length,
-                  itemBuilder: (context, i) =>
-                      _contestCard(visible[i], dateFormat),
+                  itemBuilder: (context, i) => _contestCard(visible[i]),
                 ),
               ),
             ),
@@ -215,7 +353,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
     );
   }
 
-  Widget _contestCard(Contest contest, DateFormat dateFormat) {
+  Widget _contestCard(Contest contest) {
     final key = _key(contest.platform);
     final color = _color(key);
     final hours = contest.duration.inHours;
@@ -248,7 +386,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${dateFormat.format(contest.start.toLocal())}'
+                    '${_dateFormat.format(contest.start.toLocal())}'
                     '  |  ${hours}h ${minutes}m',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -293,8 +431,8 @@ class _ContestsScreenState extends State<ContestsScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.notifications_active_outlined),
-              tooltip: 'Remind me ${_reminderBefore.inMinutes} min before',
-              onPressed: () => _setReminder(contest, dateFormat),
+              tooltip: 'Set reminder',
+              onPressed: () => _pickReminder(contest),
             ),
           ],
         ),
