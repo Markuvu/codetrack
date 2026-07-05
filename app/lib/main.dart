@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import 'screens/auth_screen.dart';
 import 'screens/contests_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/flashcards_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/progress_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
@@ -15,11 +17,14 @@ Future<void> main() async {
   if (!kIsWeb) {
     await NotificationService.instance.init();
   }
-  runApp(const CodeTrackApp());
+  final loggedIn = await AuthService.instance.isLoggedIn();
+  runApp(CodeTrackApp(loggedIn: loggedIn));
 }
 
 class CodeTrackApp extends StatelessWidget {
-  const CodeTrackApp({super.key});
+  const CodeTrackApp({super.key, required this.loggedIn});
+
+  final bool loggedIn;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +36,7 @@ class CodeTrackApp extends StatelessWidget {
         brightness: Brightness.dark,
         useMaterial3: true,
       ),
-      home: const HomeShell(),
+      home: loggedIn ? const HomeShell() : const AuthScreen(),
     );
   }
 }
@@ -74,7 +79,7 @@ class _HomeShellState extends State<HomeShell> {
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profiles'),
+          NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
           NavigationDestination(icon: Icon(Icons.emoji_events_outlined), label: 'Contests'),
           NavigationDestination(icon: Icon(Icons.show_chart), label: 'Progress'),
           NavigationDestination(icon: Icon(Icons.style_outlined), label: 'Cards'),

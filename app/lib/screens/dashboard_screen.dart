@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/contest.dart';
 import '../models/profile.dart';
 import '../services/api_client.dart';
+import '../services/auth_service.dart';
 import '../storage/app_store.dart';
 
 const kPlatforms = ['codeforces', 'leetcode', 'codechef', 'atcoder', 'gfg'];
@@ -28,6 +29,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<String, PlatformProfile> _profiles = {};
   final Map<String, String> _errors = {};
   List<Contest> _contests = [];
+  String? _userName;
   bool _loading = false;
 
   @override
@@ -38,12 +40,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _load() async {
     _handles = await _store.loadHandles();
+    _userName = await AuthService.instance.name();
     if (mounted) setState(() {});
     await _refresh();
   }
 
   Future<void> _refresh() async {
     setState(() => _loading = true);
+    _userName = await AuthService.instance.name();
     await Future.wait([
       ..._handles.entries.map((entry) async {
         try {
@@ -333,7 +337,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _greeting() {
     final theme = Theme.of(context);
-    final name = _handles.values.isNotEmpty ? _handles.values.first : 'Coder';
+    final name = (_userName != null && _userName!.isNotEmpty)
+        ? _userName!
+        : (_handles.values.isNotEmpty ? _handles.values.first : 'Coder');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
