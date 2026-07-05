@@ -48,25 +48,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _refresh();
   }
 
-  Future<void> _refresh() async {
+  /// [fresh] is set by pull-to-refresh: the backend then bypasses its 6h
+  /// profile cache (5-min cooldown) and records an up-to-date snapshot, so
+  /// today's weekly-progress bar reflects problems solved moments ago.
+  Future<void> _refresh({bool fresh = false}) async {
     setState(() => _loading = true);
     _userName = await AuthService.instance.name();
     await Future.wait([
       ..._handles.entries.map((entry) async {
         try {
-          _profiles[entry.key] =
-              await _api.fetchProfile(entry.key, entry.value);
+          _profiles[entry.key] = await _api.fetchProfile(
+              entry.key, entry.value,
+              fresh: fresh);
           _errors.remove(entry.key);
         } catch (err) {
           _errors[entry.key] = 'Failed to load: $err';
-        }
-      }),
-      ..._handles.entries.map((entry) async {
-        try {
-          _snapshots[entry.key] =
-              await _api.fetchSnapshots(entry.key, entry.value);
-        } catch (_) {
-          // Best-effort; the weekly card simply shows fewer bars.
         }
       }),
       () async {
@@ -77,6 +73,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }(),
     ]);
+    // Snapshots are loaded after profiles so a forced refresh picks up the
+    // snapshot the backend just recorded for today.
+    await Future.wait(_handles.entries.map((entry) async {
+      try {
+        _snapshots[entry.key] =
+            await _api.fetchSnapshots(entry.key, entry.value);
+      } catch (_) {
+        // Best-effort; the weekly card simply shows fewer bars.
+      }
+    }));
     if (mounted) setState(() => _loading = false);
   }
 
@@ -300,7 +306,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: () => _refresh(fresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -334,7 +340,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 12),
           Text(
             'Tap a platform card to add or edit its handle.\n'
-            'Pull down to refresh - stats are cached for 6 hours.',
+            'Pull down to refresh your latest stats.',
             style: Theme.of(context).textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
@@ -691,8 +697,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (total == 0) ...[
                   const SizedBox(height: 10),
                   Text(
-                    'Bars fill in from daily snapshots - open the app each '
-                    'day so it can record your solved counts.',
+                    'Pull down to refresh after solving. Today\'s bar needs '
+                    'yesterday\'s snapshot as a baseline, so brand-new '
+                    'handles start counting from tomorrow.',
                     style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                     textAlign: TextAlign.center,
                   ),

@@ -11,6 +11,7 @@ import { getLeetCodeProfile } from "./services/leetcode.js"
 import { getSnapshots, recordSnapshot } from "./services/snapshots.js"
 
 const PROFILE_TTL_SECONDS = 6 * 60 * 60 // profiles change slowly; be gentle with sources
+const FRESH_COOLDOWN_SECONDS = 5 * 60 // forced refresh still waits 5 min between real fetches
 const CONTESTS_TTL_SECONDS = 3 * 60 * 60
 const SOLVED_TTL_SECONDS = 60 * 60
 
@@ -24,14 +25,26 @@ const PLATFORMS = {
 
 // Fetch a profile through the cache; every fresh fetch also records a daily
 // snapshot so the app can draw progress graphs and streaks over time.
-function fetchProfileCached(platform, handle) {
-  return cache.wrap(`profile:${platform}:${handle}`, PROFILE_TTL_SECONDS, async () => {
-    const profile = await PLATFORMS[platform](handle)
-    recordSnapshot(platform, handle, profile).catch((err) =>
-      console.error(`snapshot failed for ${platform}:${handle}:`, err.message),
-    )
-    return profile
-  })
+// Pass fresh=true (user pulled to refresh) to bypass the TTL, limited by a
+// 5-minute cooldown so repeated pulls don't hammer the platforms.
+function fetchProfileCached(platform, handle, { fresh = false } = {}) {
+  return cache.wrap(
+    `profile:${platform}:${handle}`,
+    PROFILE_TTL_SECONDS,
+    async () => {
+      const profile = await PLATFORMS[platform](handle)
+      recordSnapshot(platform, handle, profile).catch((err) =>
+        console.error(`snapshot failed for ${platform}:${handle}:`, err.message),
+      )
+      return profile
+    },
+    fresh ? { maxAgeSeconds: FRESH_COOLDOWN_SECONDS } : undefined,
+  )
+}
+
+function wantsFresh(req) {
+  const value = req.query.fresh
+  return value === "1" || value === "true"
 }
 
 const app = express()
@@ -40,7 +53,7 @@ app.use(express.json())
 
 app.get("/health", (_req, res) => res.json({ ok: true }))
 
-// Single profile: GET /api/profile/codeforces/tourist
+// Single profile: GET /api/profile/codeforces/tourist[?fresh=1]
 app.get("/api/profile/:platform/:handle", async (req, res) => {
   const { platform, handle } = req.params
   if (!PLATFORMS[platform]) {
@@ -49,17 +62,18 @@ app.get("/api/profile/:platform/:handle", async (req, res) => {
     })
   }
   try {
-    res.json(await fetchProfileCached(platform, handle))
+    res.json(await fetchProfileCached(platform, handle, { fresh: wantsFresh(req) }))
   } catch (err) {
     res.status(502).json({ error: err.message })
   }
 })
 
-// Batch: GET /api/profiles?codeforces=tourist&leetcode=neal_wu
+// Batch: GET /api/profiles?codeforces=tourist&leetcode=neal_wu[&fresh=1]
 app.get("/api/profiles", async (req, res) => {
+  const fresh = wantsFresh(req)
   const entries = Object.entries(req.query).filter(([platform]) => PLATFORMS[platform])
   const settled = await Promise.allSettled(
-    entries.map(([platform, handle]) => fetchProfileCached(platform, String(handle))),
+    entries.map(([platform, handle]) => fetchProfileCached(platform, String(handle), { fresh })),
   )
   res.json({
     profiles: settled.map((result, i) => ({

@@ -32,8 +32,14 @@ class ApiClient {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  Future<PlatformProfile> fetchProfile(String platform, String handle) async {
-    return PlatformProfile.fromJson(await _getJson('/api/profile/$platform/$handle'));
+  /// Set [fresh] when the user explicitly refreshes: the backend bypasses its
+  /// 6h cache (subject to a 5-minute cooldown) and records a new snapshot.
+  Future<PlatformProfile> fetchProfile(String platform, String handle,
+      {bool fresh = false}) async {
+    final suffix = fresh ? '?fresh=1' : '';
+    return PlatformProfile.fromJson(
+        await _getJson('/api/profile/$platform/$handle$suffix',
+            timeout: const Duration(seconds: 60)));
   }
 
   Future<List<Contest>> fetchContests() async {

@@ -7,12 +7,12 @@ Base URL: `http://localhost:3000` (dev). All responses are JSON unless noted. Up
 ### `GET /health`
 `{ ok: true }` - liveness check.
 
-### `GET /api/profile/:platform/:handle`
+### `GET /api/profile/:platform/:handle[?fresh=1]`
 Single normalized profile. `platform` in `codeforces | leetcode | codechef | atcoder | gfg`.
-Cached 6h; every fresh fetch also records a daily snapshot.
+Cached 6h; every fresh fetch also records a daily snapshot. Pass `fresh=1` (used by the app's pull-to-refresh) to bypass the cache - still subject to a **5-minute per-handle cooldown** so refresh-spamming can't hammer the platforms.
 
-### `GET /api/profiles?codeforces=tourist&leetcode=neal_wu&...`
-Batch fetch. Returns `{ profiles: [{ platform, handle, data? , error? }] }` - per-entry errors, never all-or-nothing.
+### `GET /api/profiles?codeforces=tourist&leetcode=neal_wu&...[&fresh=1]`
+Batch fetch. Returns `{ profiles: [{ platform, handle, data? , error? }] }` - per-entry errors, never all-or-nothing. `fresh=1` applies to every entry.
 
 ### `GET /api/contests`
 `{ contests: [{ id, platform, name, startsAt, durationSeconds, url }] }` - upcoming contests via CLIST v4 (`resource__in` filter), Codeforces API fallback when empty. Cached 3h.
@@ -40,7 +40,7 @@ Binary image (PNG/ICO) for the platform's logo, proxied server-side to avoid bro
 
 | Data | TTL |
 |---|---|
-| Profiles | 6 h |
+| Profiles | 6 h (bypassable with `fresh=1`, 5-min cooldown) |
 | Contests | 3 h |
 | Recent solved | 1 h |
 | Logos | 7 d in memory, 1 d client cache |
