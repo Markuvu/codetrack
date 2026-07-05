@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -81,11 +82,19 @@ class _ContestsScreenState extends State<ContestsScreen> {
                   icon: const Icon(Icons.notifications_active_outlined),
                   tooltip: 'Remind me 30 min before',
                   onPressed: () async {
-                    await NotificationService.instance
+                    final scheduled = await NotificationService.instance
                         .scheduleContestReminder(contest);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Reminder set: ${contest.name}')),
+                        SnackBar(
+                          content: Text(
+                            scheduled
+                                ? 'Reminder set: ${contest.name}'
+                                : kIsWeb
+                                    ? 'Reminders are not supported in the browser - run the Android app for notifications.'
+                                    : 'Contest starts too soon to schedule a reminder.',
+                          ),
+                        ),
                       );
                     }
                   },

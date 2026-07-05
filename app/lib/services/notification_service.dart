@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -12,6 +13,7 @@ class NotificationService {
   final _plugin = FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
+    if (kIsWeb) return; // local notifications are not supported on web
     tzdata.initializeTimeZones();
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -24,12 +26,15 @@ class NotificationService {
         ?.requestNotificationsPermission();
   }
 
-  Future<void> scheduleContestReminder(
+  /// Returns true if a reminder was scheduled, false if unsupported (web)
+  /// or the contest starts too soon.
+  Future<bool> scheduleContestReminder(
     Contest contest, {
     Duration before = const Duration(minutes: 30),
   }) async {
+    if (kIsWeb) return false;
     final when = contest.start.subtract(before);
-    if (when.isBefore(DateTime.now())) return;
+    if (when.isBefore(DateTime.now())) return false;
 
     await _plugin.zonedSchedule(
       contest.id.hashCode,
@@ -50,5 +55,6 @@ class NotificationService {
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
+    return true;
   }
 }

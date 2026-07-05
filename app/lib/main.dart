@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'screens/contests_screen.dart';
@@ -10,7 +11,10 @@ import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.instance.init();
+  // Local notifications are not supported in the browser.
+  if (!kIsWeb) {
+    await NotificationService.instance.init();
+  }
   runApp(const CodeTrackApp());
 }
 
