@@ -46,9 +46,11 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 ## Friends (tab 5)
 
-- **Per-platform** friend lists (`friends_<platform>` in prefs) with a logo chip selector for all 5 platforms
-- Leaderboard with medals, "(you)" marker, rating+solved subtitle (rating hidden for GFG / unrated), long-press to remove a friend
-- Errors per row (bad handle doesn't break the list)
+- **Segmented platform bar** (same pattern as the Contests filter): one fixed row of equal-width logo tiles showing each platform's friend count; selected tile tinted/outlined in the platform color; caption underneath states platform, friend count, and ranking metric
+- **Leaderboard cards**: medal badges (top 3) / numbered rank circles, **your row highlighted** (tinted + outlined + "You" pill), trailing headline stat in the platform color (rating, or solved for GFG/unrated) with solved count beneath
+- **Swipe left to remove** a friend (red swipe background) with an **Undo** snackbar; long-press still works as an alternative; removal updates the list locally without a refetch
+- Extended **Add friend** FAB; improved empty state with icon + call-to-action (mentions linking your own handle when missing)
+- Per-platform friend lists (`friends_<platform>` in prefs); errors per row (bad handle shows inline and doesn't break the list)
 
 ## Settings
 
