@@ -711,4 +711,260 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 : 'Let\'s get solving!';
 
     return Column(
-      crossAxisAlignment: CrossAxisA
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Weekly Progress',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              tooltip: 'Set weekly goal',
+              onPressed: _editGoal,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 130,
+                        child: _weeklyBars(values, color),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      children: [
+                        SizedBox(
+                          width: 62,
+                          height: 62,
+                          child: CircularProgressIndicator(
+                            value: progress.clamp(0.0, 1.0),
+                            strokeWidth: 7,
+                            strokeCap: StrokeCap.round,
+                            backgroundColor: color.withOpacity(0.15),
+                            color: color,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '$total',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' / $_weeklyGoal',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text('This Week', style: theme.textTheme.bodySmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$pct% of goal',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4CAF50),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(message, style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ],
+                ),
+                if (total == 0) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Codeforces, LeetCode, CodeChef and AtCoder count from '
+                    'your real submission history. GFG uses daily snapshots, '
+                    'so it starts counting a day after linking.',
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _weeklyBars(List<int> values, Color color) {
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final maxValue = values.fold<int>(0, (m, v) => v > m ? v : m);
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: (maxValue == 0 ? 1 : maxValue) * 1.2,
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        barTouchData: BarTouchData(enabled: false),
+        titlesData: FlTitlesData(
+          leftTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              getTitlesWidget: (value, meta) => Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  labels[value.toInt()],
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
+            ),
+          ),
+        ),
+        barGroups: [
+          for (var i = 0; i < 7; i++)
+            BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: values[i].toDouble(),
+                  width: 14,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(4)),
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [color.withOpacity(0.55), color],
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _contestsPreview() {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final upcoming = _contests.where((c) => c.start.isAfter(now)).toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    if (upcoming.isEmpty) return const SizedBox.shrink();
+    final next = upcoming.take(3).toList();
+    final monthFmt = DateFormat('MMM');
+    final dayFmt = DateFormat('d');
+    final timeFmt = DateFormat('EEE, h:mm a');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Upcoming Contests',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            TextButton(
+              onPressed: widget.onOpenContests,
+              child: const Text('View all'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Card(
+          child: Column(
+            children: [
+              for (final c in next)
+                ListTile(
+                  onTap: widget.onOpenContests,
+                  trailing: const Icon(Icons.chevron_right, size: 18),
+                  leading: Container(
+                    width: 48,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              monthFmt
+                                  .format(c.start.toLocal())
+                                  .toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              dayFmt.format(c.start.toLocal()),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    c.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    '${_countdownText(c.start)}  |  '
+                    '${timeFmt.format(c.start.toLocal())}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _countdownText(DateTime start) {
+    final diff = start.difference(DateTime.now());
+    if (diff.inDays >= 1) {
+      return 'Starts in ${diff.inDays} day${diff.inDays == 1 ? '' : 's'}';
+    }
+    if (diff.inHours >= 1) {
+      return 'Starts in ${diff.inHours}h ${diff.inMinutes % 60}m';
+    }
+    return 'Starts in ${diff.inMinutes}m';
+  }
+}
