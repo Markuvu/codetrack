@@ -4,7 +4,7 @@ import express from "express"
 import { cache } from "./cache.js"
 import { getAtCoderProfile, getAtCoderRecentActivity } from "./services/atcoder.js"
 import { getUpcomingContests } from "./services/clist.js"
-import { getCodeChefProfile } from "./services/codechef.js"
+import { getCodeChefProfile, getCodeChefRecentActivity } from "./services/codechef.js"
 import {
   getCodeforcesProfile,
   getCodeforcesRecentActivity,
@@ -29,11 +29,14 @@ const PLATFORMS = {
   gfg: getGfgProfile,
 }
 
-// Platforms with public per-submission history. CodeChef and GFG have none,
-// so the app falls back to daily snapshot deltas for those.
+// Platforms with per-submission history. GFG is the only one without any
+// public history, so the app falls back to daily snapshot deltas for it.
+// CodeChef's comes from scraping its recent-activity table, so it is the
+// most fragile of the four - failures degrade to the snapshot fallback.
 const ACTIVITY_PLATFORMS = {
   codeforces: getCodeforcesRecentActivity,
   leetcode: getLeetCodeRecentActivity,
+  codechef: getCodeChefRecentActivity,
   atcoder: getAtCoderRecentActivity,
 }
 

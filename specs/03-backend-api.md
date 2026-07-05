@@ -17,8 +17,8 @@ Batch fetch. Returns `{ profiles: [{ platform, handle, data? , error? }] }` - pe
 ### `GET /api/activity/:platform/:handle?days=8[&fresh=1]`
 Per-solve history for the weekly-progress chart: `{ supported, solves: [{ id, at }] }` with `at` in epoch **ms**, accepted solves only, deduplicated per problem (earliest AC kept). Covers the full window even for handles linked mid-week; the app buckets days in the device's local timezone.
 
-- Supported: **codeforces** (`user.status`), **leetcode** (GraphQL `recentAcSubmissionList`, latest ~100 ACs), **atcoder** (kenkoooo submissions API)
-- **codechef / gfg**: no public history -> `{ supported: false, solves: [] }`; the app falls back to daily snapshot deltas
+- Supported: **codeforces** (`user.status`), **leetcode** (GraphQL `recentAcSubmissionList`, latest ~100 ACs), **codechef** (recent-activity table scrape - fragile, errors degrade to snapshots), **atcoder** (kenkoooo submissions API)
+- **gfg**: no public history -> `{ supported: false, solves: [] }`; the app falls back to daily snapshot deltas
 - `days` 1-31 (default 7). Cached 10 min; `fresh=1` bypasses with a 60s cooldown
 
 ### `GET /api/contests`

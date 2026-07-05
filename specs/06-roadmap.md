@@ -10,9 +10,10 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 ## Dashboard
 
-- [ ] Day-streak, submissions and AC-rate tiles (can now reuse `/api/activity` for CF/LC/AtCoder)
-- [ ] Recent Activity feed (latest accepted submissions across platforms - `/api/activity` already has the data for CF/LC/AtCoder)
-- [x] Weekly goal ring + weekly solved chart - CF/LC/AtCoder use real per-submission history via `/api/activity` (local-timezone day buckets, full week even for handles linked mid-week); CodeChef/GFG fall back to daily snapshot deltas
+- [ ] Day-streak, submissions and AC-rate tiles (can now reuse `/api/activity` for CF/LC/CC/AtCoder, plus CodeChef's `heatmap`)
+- [ ] Recent Activity feed (latest accepted submissions across platforms - `/api/activity` already has the data)
+- [x] Weekly goal ring + weekly solved chart - CF/LC/CodeChef/AtCoder use real per-submission history via `/api/activity` (local-timezone day buckets, full week even for handles linked mid-week); GFG falls back to daily snapshot deltas
+- [ ] Show CodeChef extras somewhere (league, global/country rank, institution - now scraped and available in `raw`)
 
 ## Contests & reminders
 
@@ -23,6 +24,7 @@ Things discussed but intentionally not built yet, in rough priority order.
 ## Flashcards
 
 - [ ] LeetCode solved-problem import (`recentAcSubmissionList` is now wired up in `leetcode.js` - reuse it)
+- [ ] CodeChef solved-problem import (recent-activity scrape in `codechef.js` has problem codes + solution ids)
 - [ ] Deck sharing/export
 
 ## Misc
@@ -35,5 +37,6 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 - Reminders created before commit `3987f229` fire but don't appear in the manage list
 - Recent-solved (flashcard seeding) is Codeforces-only
-- Weekly Progress: CodeChef and GFG have no public submission history, so their bars come from daily snapshot deltas (need a prior-day baseline, UTC dates); LeetCode history is capped at the latest ~100 accepted submissions (only matters if you solve 100+ in a week)
+- Weekly Progress: GFG has no public submission history, so its bars come from daily snapshot deltas (need a prior-day baseline, UTC dates); LeetCode history is capped at the latest ~100 accepted submissions; CodeChef activity is scraped (fragile - breaks silently back to snapshots if the layout changes)
+- CodeChef scraping (profile + activity) depends on page layout and embedded script variables (`all_rating`, `userDailySubmissionsStats`); selectors fail loudly on redesign
 - Snapshots live on the backend's disk - lost if the backend host is wiped (until a real DB)
