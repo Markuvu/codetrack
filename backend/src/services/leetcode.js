@@ -23,6 +23,11 @@ query userProfile($username: String!) {
     globalRanking
     topPercentage
   }
+  userContestRankingHistory(username: $username) {
+    attended
+    rating
+    contest { title startTime }
+  }
 }`
 
 export async function getLeetCodeProfile(username) {
@@ -40,6 +45,22 @@ export async function getLeetCodeProfile(username) {
   )
   const contest = data.data.userContestRanking
 
+  // Contest rating history, normalized to { contest, at, newRating } like
+  // every other platform so the dashboard sparkline and Progress charts work
+  // unchanged. The history includes contests the user did NOT attend (rating
+  // just carries over), so filter to attended ones only.
+  const history = data.data.userContestRankingHistory
+  const ratingHistory = Array.isArray(history)
+    ? history
+        .filter((entry) => entry?.attended)
+        .map((entry) => ({
+          contest: entry.contest?.title ?? "Contest",
+          at: Number(entry.contest?.startTime) || null,
+          newRating: Math.round(entry.rating),
+        }))
+        .filter((entry) => entry.at !== null && Number.isFinite(entry.newRating))
+    : []
+
   return {
     platform: "leetcode",
     handle: user.username,
@@ -50,6 +71,7 @@ export async function getLeetCodeProfile(username) {
     contestsAttended: contest?.attendedContestsCount ?? 0,
     globalRanking: contest?.globalRanking ?? null,
     topPercentage: contest?.topPercentage ?? null,
+    ratingHistory,
   }
 }
 

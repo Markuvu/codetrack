@@ -76,7 +76,10 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ],
       ),
-      body: _screens[_index],
+      // IndexedStack keeps every tab's state alive across switches: the
+      // dashboard doesn't refetch (so its card order never flickers), and
+      // scroll positions / filters on other tabs are preserved too.
+      body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
