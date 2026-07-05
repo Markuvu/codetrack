@@ -206,25 +206,116 @@ class _ContestsScreenState extends State<ContestsScreen> {
     );
   }
 
-  // --- UI ---------------------------------------------------------------
+  // --- filter bar ---------------------------------------------------------
 
-  /// Compact filter chip; chips are laid out in a [Wrap] so every platform
-  /// is visible at once (no horizontal scrolling).
-  Widget _filterChip({
-    Widget? avatar,
+  /// One equal-width tile in the segmented filter bar: icon on top, contest
+  /// count below. Selected tile is tinted and outlined in [color].
+  Widget _filterTile({
+    required Widget icon,
     required String label,
+    required int count,
     required bool selected,
+    required Color color,
     required VoidCallback onTap,
   }) {
-    return FilterChip(
-      avatar: avatar,
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      visualDensity: VisualDensity.compact,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    final theme = Theme.of(context);
+    return Expanded(
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? color.withOpacity(0.16) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? color : Colors.transparent,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 24, child: Center(child: icon)),
+                const SizedBox(height: 3),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: selected
+                        ? color
+                        : theme.textTheme.bodySmall?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
+
+  Widget _filterBar(
+      List<Contest> contests, List<String> keys, Map<String, int> counts) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color:
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  _filterTile(
+                    icon: Icon(
+                      Icons.apps,
+                      size: 20,
+                      color: _filter == null
+                          ? theme.colorScheme.primary
+                          : theme.textTheme.bodySmall?.color,
+                    ),
+                    label: 'All platforms',
+                    count: contests.length,
+                    selected: _filter == null,
+                    color: theme.colorScheme.primary,
+                    onTap: () => setState(() => _filter = null),
+                  ),
+                  for (final k in keys) ...[
+                    const SizedBox(width: 4),
+                    _filterTile(
+                      icon: PlatformLogo(k, size: 22, backdrop: true),
+                      label: platformDisplayName(k),
+                      count: counts[k] ?? 0,
+                      selected: _filter == k,
+                      color: platformColor(k),
+                      onTap: () => setState(
+                          () => _filter = _filter == k ? null : k),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_notifications_outlined),
+            tooltip: 'Manage reminders',
+            onPressed: _showReminders,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- UI ---------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -268,50 +359,31 @@ class _ContestsScreenState extends State<ContestsScreen> {
         }
 
         final keys = <String>[];
+        final counts = <String, int>{};
         for (final c in contests) {
           final k = _key(c.platform);
           if (!keys.contains(k)) keys.add(k);
+          counts[k] = (counts[k] ?? 0) + 1;
         }
         final visible = _filter == null
             ? contests
             : contests.where((c) => _key(c.platform) == _filter).toList();
 
+        final theme = Theme.of(context);
         return Column(
           children: [
+            _filterBar(contests, keys, counts),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 4, 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _filterChip(
-                          label: 'All (${contests.length})',
-                          selected: _filter == null,
-                          onTap: () => setState(() => _filter = null),
-                        ),
-                        for (final k in keys)
-                          _filterChip(
-                            avatar: PlatformLogo(k, size: 18),
-                            label:
-                                '${platformDisplayName(k)} '
-                                '(${contests.where((c) => _key(c.platform) == k).length})',
-                            selected: _filter == k,
-                            onTap: () => setState(
-                                () => _filter = _filter == k ? null : k),
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit_notifications_outlined),
-                    tooltip: 'Manage reminders',
-                    onPressed: _showReminders,
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _filter == null
+                      ? '${contests.length} upcoming contests'
+                      : '${platformDisplayName(_filter!)} \u00B7 '
+                          '${visible.length} upcoming \u00B7 tap again for all',
+                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                ),
               ),
             ),
             Expanded(
@@ -319,7 +391,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
                 onRefresh: _reload,
                 child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                   itemCount: visible.length,
                   itemBuilder: (context, i) => _contestCard(visible[i]),
                 ),
@@ -345,7 +417,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            PlatformLogo(key, size: 40),
+            PlatformLogo(key, size: 40, backdrop: true),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

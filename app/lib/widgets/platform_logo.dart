@@ -42,47 +42,71 @@ String platformDisplayName(String platform) {
 /// The platform's real logo, served by our backend (/api/logo/<platform>)
 /// so Flutter web is not blocked by CORS. Falls back to a colored-initial
 /// avatar while loading, offline, or for unknown platforms.
+///
+/// Set [backdrop] to draw the logo on a light disc - dark logos (e.g.
+/// AtCoder's black crest) are otherwise nearly invisible on the dark theme.
 class PlatformLogo extends StatelessWidget {
-  const PlatformLogo(this.platform, {super.key, this.size = 24});
+  const PlatformLogo(
+    this.platform, {
+    super.key,
+    this.size = 24,
+    this.backdrop = false,
+  });
 
   final String platform;
   final double size;
+  final bool backdrop;
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _fallback(double dimension) {
     final color = platformColor(platform);
-    final fallback = SizedBox(
-      width: size,
-      height: size,
+    return SizedBox(
+      width: dimension,
+      height: dimension,
       child: CircleAvatar(
-        radius: size / 2,
+        radius: dimension / 2,
         backgroundColor: color.withOpacity(0.18),
         foregroundColor: color,
         child: Text(
           platformDisplayName(platform)[0],
           style: TextStyle(
-            fontSize: size * 0.45,
+            fontSize: dimension * 0.45,
             fontWeight: FontWeight.bold,
           ),
         ),
       ),
     );
-    return FutureBuilder<String>(
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inner = backdrop ? size * 0.72 : size;
+    final logo = FutureBuilder<String>(
       future: ApiClient().baseUrl(),
       builder: (context, snapshot) {
         final base =
             snapshot.data?.trim().replaceAll(RegExp(r'/+$'), '');
-        if (base == null || base.isEmpty) return fallback;
+        if (base == null || base.isEmpty) return _fallback(inner);
         return ClipRRect(
-          borderRadius: BorderRadius.circular(size * 0.25),
+          borderRadius: BorderRadius.circular(inner * 0.25),
           child: Image.network(
             '$base/api/logo/$platform',
-            width: size,
-            height: size,
-            errorBuilder: (context, error, stackTrace) => fallback,
+            width: inner,
+            height: inner,
+            errorBuilder: (context, error, stackTrace) => _fallback(inner),
           ),
         );
       },
+    );
+    if (!backdrop) return logo;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: Color(0xFFECEFF1),
+        shape: BoxShape.circle,
+      ),
+      child: logo,
     );
   }
 }
