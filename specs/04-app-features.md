@@ -36,7 +36,16 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 ## Progress (tab 3)
 
-- Rating-history and solved-count charts (`fl_chart`) per linked platform, backed by live `ratingHistory` plus backend daily snapshots
+- **Segmented platform bar** of linked handles only (logo + CF/LC/CC/AC/GFG shorthand), same pattern as Contests/Friends; caption shows the active platform + handle
+- **Pull-to-refresh and the refresh button both force fresh fetches** (`fresh=1`), bypassing the 6h profile cache
+- **Stats card**: Rating (Coding Score for GFG) / Solved / Day streak / Days tracked as icon tiles in the platform color
+- **Chart card** (fl_chart line chart in the platform's color):
+  - y-axis **fitted to the data range** with padding - no more dead space below the line
+  - y-axis value labels + dashed gridlines at nice intervals; x-axis **date labels** (switches to month-'yy format for multi-year ranges)
+  - **touch tooltips**: rating, date, and contest name (or solved count + date)
+  - gradient area fill, dots when <=30 points, **delta pill** (+/- change over the visible series, green/red)
+  - **Rating / Solved toggle** (SegmentedButton) when both series have data; auto-falls back to solved-over-time when there's no rating history
+- Friendlier empty states (no linked handles / not enough snapshot data yet)
 
 ## Cards / Flashcards (tab 4)
 
