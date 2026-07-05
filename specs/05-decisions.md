@@ -40,3 +40,9 @@ Users couldn't tell when a reminder would fire. Bell now opens a lead-time picke
 
 ### 13. Repo conventions
 Single `main` branch, direct pushes (solo project). Secrets only in `backend/.env` (git-ignored, `.env.example` committed). Machine-local gradle config kept out of git.
+
+### 14. Unified heatmap counts all submissions, bucketed by UTC day
+The activity calendar (`/api/heatmap`) counts **every submission, any verdict** - not just ACs - because that's what LeetCode's and CodeChef's own heatmaps count, and it avoids expensive dedup over a year of history. Days are bucketed by **UTC date** (the format the platforms themselves report), so a late-night IST solve can land on the "previous" day's cell - same behavior as LeetCode's own calendar. Per-platform sources: LeetCode's ready-made `userCalendar.submissionCalendar` (one request, a full year); Codeforces and AtCoder counted from paged submission lists; CodeChef reuses the profile-page heatmap scrape (its dates are IST-ish and accepted as-is, so CC cells can be off by one vs the others). **GFG is excluded** - it exposes no public per-day history. Weekly Progress intentionally differs: it counts unique ACs in local time, because it measures problems solved, not activity.
+
+### 15. Heatmap style: LeetCode layout, theme colors
+First shipped GitHub-style (one continuous 53-week grid, weekday gutter, Less/More legend), then reworked to **LeetCode-style** on request: a stats header (bold total submissions, total active days, max streak), months as separate blocks with gaps and the label **below** each block, no weekday gutter. Briefly used LeetCode's green ramp, then reverted to a 4-level opacity ramp of the **theme primary color** so the card matches the rest of the dark-purple UI. Kept two extras LeetCode doesn't have: horizontal scroll with auto-jump to the current month, and tap-a-cell per-platform breakdown.
