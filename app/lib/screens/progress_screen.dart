@@ -153,6 +153,23 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return streak;
   }
 
+  /// Peak rating: the platform's own max when it reports one (CF, CC,
+  /// AtCoder), otherwise derived from the rating history (LeetCode).
+  int? _peakRating() {
+    final raw = _profile?.raw;
+    if (raw == null) return null;
+    final direct = (raw['maxRating'] as num?)?.toInt();
+    if (direct != null) return direct;
+    final history = (raw['ratingHistory'] as List?) ?? [];
+    int? peak;
+    for (final e in history) {
+      if (e is! Map) continue;
+      final r = (e['newRating'] as num?)?.toInt();
+      if (r != null && (peak == null || r > peak)) peak = r;
+    }
+    return peak;
+  }
+
   // --- chart data ----------------------------------------------------------
 
   _Series? _ratingSeries() {
@@ -263,6 +280,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final headline = isGfg
         ? _profile?.raw['codingScore']?.toString()
         : _profile?.rating?.toString();
+    final peak = _peakRating();
 
     Widget tile(IconData icon, String value, String label) => Expanded(
           child: Column(
@@ -272,7 +290,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               Text(
                 value,
                 style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.bold),
+                    fontSize: 14, fontWeight: FontWeight.bold),
               ),
               Text(
                 label,
@@ -286,17 +304,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
         child: Row(
           children: [
             tile(Icons.leaderboard_outlined, headline ?? '-',
                 isGfg ? 'Coding score' : 'Rating'),
+            if (!isGfg)
+              tile(Icons.emoji_events_outlined, peak?.toString() ?? '-',
+                  'Peak'),
             tile(Icons.check_circle_outline,
                 _profile?.solvedCount?.toString() ?? '-', 'Solved'),
             tile(Icons.local_fire_department_outlined, '$_streak',
-                'Day streak'),
+                'Streak'),
             tile(Icons.calendar_month_outlined, '${_snapshots.length}',
-                'Days tracked'),
+                'Tracked'),
           ],
         ),
       ),
@@ -351,6 +372,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
     // Net change across the charted series (last point minus first point).
     final delta = (series.spots.last.y - series.spots.first.y).round();
     final deltaColor = delta >= 0 ? Colors.greenAccent : Colors.redAccent;
+
+    // Dashed marker at the peak rating (rating chart only).
+    final peak = kind == _ChartKind.rating ? _peakRating() : null;
+    final showPeakLine =
+        peak != null && peak >= minY && peak <= maxY;
 
     DateTime? firstDate;
     DateTime? lastDate;
@@ -466,6 +492,30 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 LineChartData(
                   minY: minY,
                   maxY: maxY,
+                  extraLinesData: showPeakLine
+                      ? ExtraLinesData(
+                          horizontalLines: [
+                            HorizontalLine(
+                              y: peak.toDouble(),
+                              color: color.withOpacity(0.55),
+                              strokeWidth: 1,
+                              dashArray: const [6, 4],
+                              label: HorizontalLineLabel(
+                                show: true,
+                                alignment: Alignment.topRight,
+                                padding: const EdgeInsets.only(
+                                    right: 4, bottom: 2),
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: color,
+                                ),
+                                labelResolver: (_) => 'Peak $peak',
+                              ),
+                            ),
+                          ],
+                        )
+                      : const ExtraLinesData(),
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
