@@ -30,13 +30,8 @@ class _ActivityHeatmapState extends State<ActivityHeatmap> {
   static const _gap = 3.0;
   static const _monthGap = 10.0;
 
-  /// LeetCode-ish green ramp, dark to bright.
-  static const _greens = [
-    Color(0xFF14532D),
-    Color(0xFF1F7A3D),
-    Color(0xFF2CBB5D),
-    Color(0xFF8AE99C),
-  ];
+  /// Intensity ramp applied to the theme's primary color, dim to bright.
+  static const _levelOpacities = [0.3, 0.5, 0.75, 1.0];
 
   final _scroll = ScrollController();
   DateTime? _selected;
@@ -71,7 +66,7 @@ class _ActivityHeatmapState extends State<ActivityHeatmap> {
     final level = maxCount <= 0
         ? 4
         : ((count * 4) / maxCount).ceil().clamp(1, 4);
-    return _greens[level - 1];
+    return theme.colorScheme.primary.withOpacity(_levelOpacities[level - 1]);
   }
 
   Widget _cellFor(ThemeData theme, DateTime date, Map<String, int> totals,
