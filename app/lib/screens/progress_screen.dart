@@ -48,13 +48,18 @@ class _ProgressScreenState extends State<ProgressScreen> {
   bool _loading = false;
   _ChartKind? _kind; // null = auto (rating when available)
 
+  /// Profiles of all linked platforms (cached fetches), used only to order
+  /// the platform bar with the same logic as the Dashboard cards.
+  final Map<String, PlatformProfile> _orderProfiles = {};
+
   @override
   void initState() {
     super.initState();
     _init();
   }
 
-  /// Linked platforms in canonical order (plus any unknown extras).
+  /// Linked platforms ordered like the Dashboard: rated first, then GFG with
+  /// a coding score, then connected-but-unrated; ties keep canonical order.
   List<String> get _linked {
     final linked = [
       for (final p in _kPlatformOrder)
@@ -63,6 +68,19 @@ class _ProgressScreenState extends State<ProgressScreen> {
     for (final p in _handles.keys) {
       if (!linked.contains(p)) linked.add(p);
     }
+    final base = {for (var i = 0; i < linked.length; i++) linked[i]: i};
+    int rank(String p) {
+      final prof = _orderProfiles[p];
+      if (prof == null) return 2;
+      if (prof.rating != null) return 0;
+      if (p == 'gfg' && prof.raw['codingScore'] != null) return 1;
+      return 2;
+    }
+
+    linked.sort((a, b) {
+      final r = rank(a).compareTo(rank(b));
+      return r != 0 ? r : base[a]!.compareTo(base[b]!);
+    });
     return linked;
   }
 
@@ -70,7 +88,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
     _handles = await _store.loadHandles();
     _platform = _linked.isNotEmpty ? _linked.first : null;
     if (mounted) setState(() {});
-    await _loadData();
+    await Future.wait([_loadData(), _loadOrderingProfiles()]);
+  }
+
+  /// Fetches every linked profile (server-side cache makes this cheap) so
+  /// the bar can be sorted; failures are ignored - those platforms simply
+  /// sort with the unrated group.
+  Future<void> _loadOrderingProfiles() async {
+    await Future.wait([
+      for (final entry in _handles.entries)
+        _api.fetchProfile(entry.key, entry.value).then<void>((p) {
+          _orderProfiles[entry.key] = p;
+        }).catchError((_) {}),
+    ]);
+    if (mounted) setState(() {});
   }
 
   Future<void> _selectPlatform(String platform) async {
@@ -100,6 +131,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
       ]);
       _profile = results[0] as PlatformProfile;
       _snapshots = results[1] as List<Map<String, dynamic>>;
+      _orderProfiles[platform] = _profile!;
     } catch (err) {
       _error = 'Failed to load progress: $err';
     }
@@ -316,6 +348,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final maxY = (maxV + pad).ceilToDouble();
     final yInterval = math.max(1.0, _niceInterval(maxY - minY));
 
+    // Net change across the charted series (last point minus first point).
     final delta = (series.spots.last.y - series.spots.first.y).round();
     final deltaColor = delta >= 0 ? Colors.greenAccent : Colors.redAccent;
 
@@ -382,19 +415,22 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: deltaColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    delta >= 0 ? '+$delta' : '$delta',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: deltaColor,
+                Tooltip(
+                  message: 'Net change: first to last point',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: deltaColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      delta >= 0 ? '+$delta' : '$delta',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: deltaColor,
+                      ),
                     ),
                   ),
                 ),
