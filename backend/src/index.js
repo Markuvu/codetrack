@@ -80,9 +80,14 @@ app.get("/api/contests", async (_req, res) => {
   }
 })
 
-// Platform logos, proxied server-side. Browsers block the favicon CDN with
-// CORS errors when the web app fetches it directly; servers are exempt from
+// Platform logos, proxied server-side. Browsers block the favicon CDNs with
+// CORS errors when the web app fetches them directly; servers are exempt from
 // CORS, so we fetch here once, cache the bytes, and serve them same-origin.
+// Each platform has several candidate sources because no single favicon
+// service covers every site (e.g. Google's CDN 404s for leetcode.com).
+const FAVICON_BASE = "https://www.google.com/s2/favicons?sz=64&domain="
+const DDG_ICON_BASE = "https://icons.duckduckgo.com/ip3/"
+
 const LOGO_DOMAINS = {
   codeforces: "codeforces.com",
   leetcode: "leetcode.com",
@@ -90,14 +95,61 @@ const LOGO_DOMAINS = {
   atcoder: "atcoder.jp",
   gfg: "geeksforgeeks.org",
 }
-const FAVICON_BASE = "https://www.google.com/s2/favicons?sz=64&domain="
+
+// Preferred direct PNG sources tried before the generic favicon services
+// (PNG decodes everywhere, unlike some .ico files).
+const EXTRA_LOGO_URLS = {
+  leetcode: [
+    "https://assets.leetcode.com/static_assets/public/icons/favicon-96x96.png",
+    "https://leetcode.com/favicon.ico",
+  ],
+}
+
+function logoCandidates(platform) {
+  const domain = LOGO_DOMAINS[platform]
+  const dotIco = ".ico"
+  return [
+    ...(EXTRA_LOGO_URLS[platform] || []),
+    FAVICON_BASE + domain,
+    DDG_ICON_BASE + domain + dotIco,
+  ]
+}
+
 const LOGO_TTL_MS = 7 * 24 * 60 * 60 * 1000 // logos basically never change
 const logoCache = new Map() // platform -> { buffer, type, at }
 
+async function fetchLogo(platform) {
+  const errors = []
+  for (const url of logoCandidates(platform)) {
+    try {
+      const response = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (CodeTrack logo proxy)" },
+      })
+      if (!response.ok) {
+        errors.push(`${url} -> ${response.status}`)
+        continue
+      }
+      const type = response.headers.get("content-type") || "image/png"
+      if (!type.includes("image")) {
+        errors.push(`${url} -> not an image (${type})`)
+        continue
+      }
+      const buffer = Buffer.from(await response.arrayBuffer())
+      if (buffer.length === 0) {
+        errors.push(`${url} -> empty body`)
+        continue
+      }
+      return { buffer, type }
+    } catch (err) {
+      errors.push(`${url} -> ${err.message}`)
+    }
+  }
+  throw new Error(`all logo sources failed: ${errors.join("; ")}`)
+}
+
 app.get("/api/logo/:platform", async (req, res) => {
   const { platform } = req.params
-  const domain = LOGO_DOMAINS[platform]
-  if (!domain) {
+  if (!LOGO_DOMAINS[platform]) {
     return res.status(404).json({ error: `Unknown platform '${platform}'` })
   }
   const cached = logoCache.get(platform)
@@ -108,10 +160,7 @@ app.get("/api/logo/:platform", async (req, res) => {
       .send(cached.buffer)
   }
   try {
-    const response = await fetch(FAVICON_BASE + domain)
-    if (!response.ok) throw new Error(`favicon fetch failed (${response.status})`)
-    const buffer = Buffer.from(await response.arrayBuffer())
-    const type = response.headers.get("content-type") || "image/png"
+    const { buffer, type } = await fetchLogo(platform)
     logoCache.set(platform, { buffer, type, at: Date.now() })
     res.type(type).set("Cache-Control", "public, max-age=86400").send(buffer)
   } catch (err) {

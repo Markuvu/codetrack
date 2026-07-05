@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../storage/app_store.dart';
+import '../widgets/platform_logo.dart';
 
 const kLeaderboardPlatforms = ['codeforces', 'leetcode', 'codechef', 'atcoder', 'gfg'];
 
@@ -34,23 +35,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     _friends = await _store.loadFriends(_platform);
     if (mounted) setState(() {});
     await _refresh();
-  }
-
-  String _label(String platform) {
-    switch (platform) {
-      case 'gfg':
-        return 'GeeksforGeeks';
-      case 'atcoder':
-        return 'AtCoder';
-      case 'leetcode':
-        return 'LeetCode';
-      case 'codechef':
-        return 'CodeChef';
-      case 'codeforces':
-        return 'Codeforces';
-      default:
-        return platform;
-    }
   }
 
   String? get _ownHandle => _handles[_platform];
@@ -93,7 +77,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final handle = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Add friend (${_label(_platform)} handle)'),
+        title: Text('Add friend (${platformDisplayName(_platform)} handle)'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -162,7 +146,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               children: [
                 for (final p in kLeaderboardPlatforms) ...[
                   ChoiceChip(
-                    label: Text(_label(p)),
+                    avatar: PlatformLogo(p, size: 18),
+                    label: Text(platformDisplayName(p)),
                     selected: _platform == p,
                     onSelected: (_) => _selectPlatform(p),
                   ),
@@ -177,7 +162,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Add your ${_label(_platform)} handle in the Profiles tab,\n'
+                        'Add your ${platformDisplayName(_platform)} handle in the Dashboard tab,\n'
                         'then add friends with the + button to compare.',
                         textAlign: TextAlign.center,
                       ),

@@ -7,6 +7,7 @@ import '../models/profile.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../storage/app_store.dart';
+import '../widgets/platform_logo.dart';
 
 const kPlatforms = ['codeforces', 'leetcode', 'codechef', 'atcoder', 'gfg'];
 
@@ -26,9 +27,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<String, String> _errors = {};
   List<Contest> _contests = [];
   String? _userName;
-  // Logos are served by our own backend (/api/logo/<platform>) because the
-  // favicon CDN blocks direct browser requests with CORS on Flutter web.
-  String? _backendBase;
   bool _loading = false;
 
   @override
@@ -40,8 +38,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _load() async {
     _handles = await _store.loadHandles();
     _userName = await AuthService.instance.name();
-    _backendBase =
-        (await _api.baseUrl()).trim().replaceAll(RegExp(r'/+$'), '');
     if (mounted) setState(() {});
     await _refresh();
   }
@@ -49,8 +45,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _refresh() async {
     setState(() => _loading = true);
     _userName = await AuthService.instance.name();
-    _backendBase =
-        (await _api.baseUrl()).trim().replaceAll(RegExp(r'/+$'), '');
     await Future.wait([
       ..._handles.entries.map((entry) async {
         try {
@@ -77,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final handle = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('${_displayName(platform)} handle'),
+        title: Text('${platformDisplayName(platform)} handle'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -110,67 +104,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // --- platform helpers --------------------------------------------------
-
-  String _displayName(String platform) {
-    switch (platform) {
-      case 'gfg':
-        return 'GeeksforGeeks';
-      case 'atcoder':
-        return 'AtCoder';
-      case 'leetcode':
-        return 'LeetCode';
-      case 'codechef':
-        return 'CodeChef';
-      case 'codeforces':
-        return 'Codeforces';
-      default:
-        return platform;
-    }
-  }
-
-  Color _color(String platform) {
-    switch (platform) {
-      case 'codeforces':
-        return const Color(0xFF5C9DFF);
-      case 'leetcode':
-        return const Color(0xFFFFA116);
-      case 'codechef':
-        return const Color(0xFFC5854A);
-      case 'atcoder':
-        return const Color(0xFFB0BEC5);
-      case 'gfg':
-        return const Color(0xFF4CAF50);
-      default:
-        return const Color(0xFF9E9E9E);
-    }
-  }
-
-  Widget _logo(String platform, {double size = 24}) {
-    final color = _color(platform);
-    final fallback = CircleAvatar(
-      radius: size / 2,
-      backgroundColor: color.withOpacity(0.18),
-      foregroundColor: color,
-      child: Text(
-        _displayName(platform)[0],
-        style: TextStyle(
-          fontSize: size * 0.45,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-    final base = _backendBase;
-    if (base == null || base.isEmpty) return fallback;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: Image.network(
-        '$base/api/logo/$platform',
-        width: size,
-        height: size,
-        errorBuilder: (context, error, stackTrace) => fallback,
-      ),
-    );
-  }
 
   String _metricLabel(String platform) =>
       platform == 'gfg' ? 'Coding Score' : 'Rating';
@@ -433,7 +366,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _platformCard(String platform) {
     final theme = Theme.of(context);
-    final color = _color(platform);
+    final color = platformColor(platform);
     final handle = _handles[platform];
     final profile = _profiles[platform];
     final error = _errors[platform];
@@ -548,11 +481,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Row(
                   children: [
-                    _logo(platform),
+                    PlatformLogo(platform, size: 24),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _displayName(platform),
+                        platformDisplayName(platform),
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 13,

@@ -6,6 +6,7 @@ import '../models/contest.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
 import '../storage/app_store.dart';
+import '../widgets/platform_logo.dart';
 
 class ContestsScreen extends StatefulWidget {
   const ContestsScreen({super.key});
@@ -50,40 +51,6 @@ class _ContestsScreenState extends State<ContestsScreen> {
     if (p.contains('atcoder')) return 'atcoder';
     if (p.contains('geeksforgeeks') || p.contains('gfg')) return 'gfg';
     return p.replaceAll(RegExp(r'\.(com|org|jp|in)$'), '');
-  }
-
-  String _label(String key) {
-    switch (key) {
-      case 'codeforces':
-        return 'Codeforces';
-      case 'leetcode':
-        return 'LeetCode';
-      case 'codechef':
-        return 'CodeChef';
-      case 'atcoder':
-        return 'AtCoder';
-      case 'gfg':
-        return 'GeeksforGeeks';
-      default:
-        return key.isEmpty ? 'Other' : key[0].toUpperCase() + key.substring(1);
-    }
-  }
-
-  Color _color(String key) {
-    switch (key) {
-      case 'codeforces':
-        return const Color(0xFF5C9DFF);
-      case 'leetcode':
-        return const Color(0xFFFFA116);
-      case 'codechef':
-        return const Color(0xFFC5854A);
-      case 'atcoder':
-        return const Color(0xFFB0BEC5);
-      case 'gfg':
-        return const Color(0xFF4CAF50);
-      default:
-        return const Color(0xFF9E9E9E);
-    }
   }
 
   String _countdown(DateTime start) {
@@ -164,7 +131,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
     reminders.add({
       'notifId': id,
       'contestName': contest.name,
-      'platform': _label(_key(contest.platform)),
+      'platform': platformDisplayName(_key(contest.platform)),
       'startMs': contest.start.millisecondsSinceEpoch,
       'notifyAtMs': contest.start.subtract(before).millisecondsSinceEpoch,
     });
@@ -311,12 +278,9 @@ class _ContestsScreenState extends State<ContestsScreen> {
                         for (final k in keys) ...[
                           const SizedBox(width: 8),
                           FilterChip(
-                            avatar: CircleAvatar(
-                              backgroundColor: _color(k),
-                              radius: 6,
-                            ),
+                            avatar: PlatformLogo(k, size: 18),
                             label: Text(
-                              '${_label(k)} '
+                              '${platformDisplayName(k)} '
                               '(${contests.where((c) => _key(c.platform) == k).length})',
                             ),
                             selected: _filter == k,
@@ -355,7 +319,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
 
   Widget _contestCard(Contest contest) {
     final key = _key(contest.platform);
-    final color = _color(key);
+    final color = platformColor(key);
     final hours = contest.duration.inHours;
     final minutes = contest.duration.inMinutes % 60;
     final countdown = _countdown(contest.start);
@@ -367,14 +331,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: color.withOpacity(0.18),
-              foregroundColor: color,
-              child: Text(
-                _label(key)[0],
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
+            PlatformLogo(key, size: 40),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -401,7 +358,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          _label(key),
+                          platformDisplayName(key),
                           style: TextStyle(
                             fontSize: 12,
                             color: color,
