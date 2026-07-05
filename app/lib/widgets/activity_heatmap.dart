@@ -10,27 +10,33 @@ const _kShort = {
   'gfg': 'GFG',
 };
 
-/// GitHub-style contribution calendar that merges submissions from every
-/// linked platform into one grid. Dates are the UTC day buckets reported by
-/// the backend. Tap a cell to see that day's per-platform breakdown.
+/// LeetCode-style contribution calendar that merges submissions from every
+/// linked platform into one view: a header with totals (submissions, active
+/// days, max streak), then one block per month with the label underneath.
+/// Dates are the UTC day buckets reported by the backend. Tap a cell to see
+/// that day's per-platform breakdown.
 class ActivityHeatmap extends StatefulWidget {
-  const ActivityHeatmap({super.key, required this.byPlatform, this.weeks = 53});
+  const ActivityHeatmap({super.key, required this.byPlatform});
 
   /// platform -> 'yyyy-MM-dd' -> submissions that day.
   final Map<String, Map<String, int>> byPlatform;
-
-  /// Number of week columns (53 covers a full year).
-  final int weeks;
 
   @override
   State<ActivityHeatmap> createState() => _ActivityHeatmapState();
 }
 
 class _ActivityHeatmapState extends State<ActivityHeatmap> {
-  static const _cell = 12.0;
+  static const _cell = 11.0;
   static const _gap = 3.0;
-  static const _col = _cell + _gap;
-  static const _levelOpacities = [0.3, 0.5, 0.75, 1.0];
+  static const _monthGap = 10.0;
+
+  /// LeetCode-ish green ramp, dark to bright.
+  static const _greens = [
+    Color(0xFF14532D),
+    Color(0xFF1F7A3D),
+    Color(0xFF2CBB5D),
+    Color(0xFF8AE99C),
+  ];
 
   final _scroll = ScrollController();
   DateTime? _selected;
@@ -38,7 +44,7 @@ class _ActivityHeatmapState extends State<ActivityHeatmap> {
   @override
   void initState() {
     super.initState();
-    // Start scrolled to the most recent weeks.
+    // Start scrolled to the most recent month.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
@@ -65,29 +71,11 @@ class _ActivityHeatmapState extends State<ActivityHeatmap> {
     final level = maxCount <= 0
         ? 4
         : ((count * 4) / maxCount).ceil().clamp(1, 4);
-    return theme.colorScheme.primary.withOpacity(_levelOpacities[level - 1]);
+    return _greens[level - 1];
   }
 
-  Widget _monthLabel(DateTime start, int w, DateFormat fmt, ThemeData theme) {
-    final monday = start.add(Duration(days: w * 7));
-    if (w > 0) {
-      final prev = start.add(Duration(days: (w - 1) * 7));
-      if (prev.month == monday.month) return const SizedBox.shrink();
-    }
-    return Text(
-      fmt.format(monday),
-      style: theme.textTheme.bodySmall?.copyWith(fontSize: 9),
-      maxLines: 1,
-      softWrap: false,
-      overflow: TextOverflow.visible,
-    );
-  }
-
-  Widget _cellFor(ThemeData theme, DateTime date, DateTime today,
-      Map<String, int> totals, int maxCount) {
-    if (date.isAfter(today)) {
-      return const SizedBox(width: _cell, height: _cell);
-    }
+  Widget _cellFor(ThemeData theme, DateTime date, Map<String, int> totals,
+      int maxCount) {
     final count = totals[_key(date)] ?? 0;
     final selected = _selected == date;
     return GestureDetector(
@@ -106,6 +94,63 @@ class _ActivityHeatmapState extends State<ActivityHeatmap> {
     );
   }
 
+  /// One month as its own mini-grid (Mon..Sun rows) with the label below,
+  /// like LeetCode's calendar.
+  Widget _monthBlock(
+    ThemeData theme,
+    DateTime month,
+    DateTime windowStart,
+    DateTime today,
+    Map<String, int> totals,
+    int maxCount,
+    DateFormat monthFmt,
+  ) {
+    final monthEnd = DateTime.utc(month.year, month.month + 1, 0);
+    final first = month.isBefore(windowStart) ? windowStart : month;
+    final last = monthEnd.isAfter(today) ? today : monthEnd;
+    if (last.isBefore(first)) return const SizedBox.shrink();
+    final firstMonday = first.subtract(Duration(days: first.weekday - 1));
+    final weekCount = (last.difference(firstMonday).inDays ~/ 7) + 1;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var w = 0; w < weekCount; w++)
+              Padding(
+                padding: EdgeInsets.only(
+                    right: w == weekCount - 1 ? 0 : _gap),
+                child: Column(
+                  children: [
+                    for (var r = 0; r < 7; r++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: _gap),
+                        child: () {
+                          final date =
+                              firstMonday.add(Duration(days: w * 7 + r));
+                          if (date.isBefore(first) || date.isAfter(last)) {
+                            return const SizedBox(
+                                width: _cell, height: _cell);
+                          }
+                          return _cellFor(theme, date, totals, maxCount);
+                        }(),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          monthFmt.format(month),
+          style: theme.textTheme.bodySmall?.copyWith(fontSize: 9),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -118,87 +163,47 @@ class _ActivityHeatmapState extends State<ActivityHeatmap> {
       });
     });
 
-    // The grid ends at today's UTC date (backend buckets days in UTC).
+    // The window is the past year ending at today's UTC date (backend
+    // buckets days in UTC).
     final nowUtc = DateTime.now().toUtc();
     final today = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
-    final thisMonday = today.subtract(Duration(days: today.weekday - 1));
-    final start = thisMonday.subtract(Duration(days: 7 * (widget.weeks - 1)));
+    final windowStart = today.subtract(const Duration(days: 364));
 
-    var maxCount = 0;
+    // Totals, active days and the longest run of consecutive active days.
     var total = 0;
-    totals.forEach((date, count) {
-      final parsed = DateTime.tryParse(date);
-      if (parsed == null) return;
-      final day = DateTime.utc(parsed.year, parsed.month, parsed.day);
-      if (day.isBefore(start) || day.isAfter(today)) return;
+    var maxCount = 0;
+    var activeDays = 0;
+    var maxStreak = 0;
+    var run = 0;
+    for (var d = windowStart;
+        !d.isAfter(today);
+        d = d.add(const Duration(days: 1))) {
+      final count = totals[_key(d)] ?? 0;
       total += count;
       if (count > maxCount) maxCount = count;
-    });
+      if (count > 0) {
+        activeDays++;
+        run++;
+        if (run > maxStreak) maxStreak = run;
+      } else {
+        run = 0;
+      }
+    }
+
+    // Month blocks covering the window, oldest first.
+    final months = <DateTime>[];
+    var m = DateTime.utc(windowStart.year, windowStart.month, 1);
+    final lastMonth = DateTime.utc(today.year, today.month, 1);
+    while (!m.isAfter(lastMonth)) {
+      months.add(m);
+      m = DateTime.utc(m.year, m.month + 1, 1);
+    }
 
     final monthFmt = DateFormat('MMM');
-    const dayLabels = {0: 'Mon', 2: 'Wed', 4: 'Fri'};
-
-    final labelColumn = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        const SizedBox(height: 14),
-        for (var r = 0; r < 7; r++)
-          SizedBox(
-            height: _cell + _gap,
-            width: 26,
-            child: Text(
-              dayLabels[r] ?? '',
-              style: theme.textTheme.bodySmall?.copyWith(fontSize: 8),
-              textAlign: TextAlign.right,
-            ),
-          ),
-      ],
-    );
-
-    final grid = SingleChildScrollView(
-      controller: _scroll,
-      scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 14,
-            child: Row(
-              children: [
-                for (var w = 0; w < widget.weeks; w++)
-                  SizedBox(
-                    width: _col,
-                    child: _monthLabel(start, w, monthFmt, theme),
-                  ),
-              ],
-            ),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var w = 0; w < widget.weeks; w++)
-                Padding(
-                  padding: const EdgeInsets.only(right: _gap),
-                  child: Column(
-                    children: [
-                      for (var r = 0; r < 7; r++)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: _gap),
-                          child: _cellFor(
-                            theme,
-                            start.add(Duration(days: w * 7 + r)),
-                            today,
-                            totals,
-                            maxCount,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
+    final boldValue = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 11,
+      fontWeight: FontWeight.bold,
+      color: theme.textTheme.bodyLarge?.color,
     );
 
     Widget? detail;
@@ -223,50 +228,70 @@ class _ActivityHeatmapState extends State<ActivityHeatmap> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        // Header: bold totals like LeetCode's calendar.
+        Wrap(
+          spacing: 14,
+          runSpacing: 2,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            labelColumn,
-            const SizedBox(width: 6),
-            Expanded(child: grid),
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$total ',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(
+                    text: 'submissions in the past one year',
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Total active days: ',
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                  ),
+                  TextSpan(text: '$activeDays', style: boldValue),
+                ],
+              ),
+            ),
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Max streak: ',
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                  ),
+                  TextSpan(text: '$maxStreak', style: boldValue),
+                ],
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '$total submissions in the last year',
-                style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
-              ),
-            ),
-            Text(
-              'Less ',
-              style: theme.textTheme.bodySmall?.copyWith(fontSize: 9),
-            ),
-            for (var i = 0; i <= 4; i++)
-              Padding(
-                padding: const EdgeInsets.only(left: 3),
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: i == 0
-                        ? _emptyColor(theme)
-                        : theme.colorScheme.primary
-                            .withOpacity(_levelOpacities[i - 1]),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          controller: _scroll,
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < months.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(
+                      right: i == months.length - 1 ? 0 : _monthGap),
+                  child: _monthBlock(theme, months[i], windowStart, today,
+                      totals, maxCount, monthFmt),
                 ),
-              ),
-            Text(
-              '  More',
-              style: theme.textTheme.bodySmall?.copyWith(fontSize: 9),
-            ),
-          ],
+            ],
+          ),
         ),
         if (detail != null) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           detail,
         ],
       ],
