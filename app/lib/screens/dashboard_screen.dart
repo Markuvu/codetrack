@@ -604,32 +604,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ListTile(
                   leading: Container(
                     width: 48,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    height: 44,
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          monthFmt
-                              .format(c.start.toLocal())
-                              .toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              monthFmt
+                                  .format(c.start.toLocal())
+                                  .toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              dayFmt.format(c.start.toLocal()),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          dayFmt.format(c.start.toLocal()),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   title: Text(
