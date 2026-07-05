@@ -51,12 +51,14 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  static const _screens = <Widget>[
-    DashboardScreen(),
-    ContestsScreen(),
-    ProgressScreen(),
-    FlashcardsScreen(),
-    LeaderboardScreen(),
+  // Built lazily so the dashboard can jump to other tabs (e.g. "View all"
+  // on the contests preview switches to the Contests tab).
+  late final List<Widget> _screens = <Widget>[
+    DashboardScreen(onOpenContests: () => setState(() => _index = 1)),
+    const ContestsScreen(),
+    const ProgressScreen(),
+    const FlashcardsScreen(),
+    const LeaderboardScreen(),
   ];
 
   @override

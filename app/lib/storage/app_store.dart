@@ -10,6 +10,7 @@ class AppStore {
   static const _handlesKey = 'handles';
   static const _cardsKey = 'flashcards';
   static const _remindersKey = 'scheduled_reminders';
+  static const _weeklyGoalKey = 'weekly_goal';
 
   Future<Map<String, String>> loadHandles() async {
     final prefs = await SharedPreferences.getInstance();
@@ -68,5 +69,16 @@ class AppStore {
   Future<void> saveReminders(List<Map<String, dynamic>> reminders) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_remindersKey, jsonEncode(reminders));
+  }
+
+  /// Weekly problems-solved goal for the dashboard progress ring.
+  Future<int> loadWeeklyGoal() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_weeklyGoalKey) ?? 50;
+  }
+
+  Future<void> saveWeeklyGoal(int goal) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_weeklyGoalKey, goal);
   }
 }

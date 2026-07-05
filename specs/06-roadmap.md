@@ -12,7 +12,7 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 - [ ] Day-streak, submissions and AC-rate tiles (needs a submissions-history endpoint)
 - [ ] Recent Activity feed (latest accepted submissions across platforms)
-- [ ] Weekly goal ring + weekly solved chart (needs local goal setting + submission history)
+- [x] Weekly goal ring + weekly solved chart - shipped using daily snapshot deltas; accuracy improves once a real per-submission history endpoint exists (snapshots only capture days the app fetched fresh data, and snapshot dates are UTC)
 
 ## Contests & reminders
 
@@ -35,4 +35,5 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 - Reminders created before commit `3987f229` fire but don't appear in the manage list
 - Recent-solved (flashcard seeding) is Codeforces-only
+- Weekly Progress bars only count days where the backend recorded a fresh snapshot (open the app daily for best accuracy); snapshot dates are UTC so late-night solves can land on the neighboring bar
 - Snapshots live on the backend's disk - lost if the backend host is wiped (until a real DB)

@@ -12,7 +12,10 @@ import '../widgets/platform_logo.dart';
 const kPlatforms = ['codeforces', 'leetcode', 'codechef', 'atcoder', 'gfg'];
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.onOpenContests});
+
+  /// Switches the app to the Contests tab (wired up by HomeShell).
+  final VoidCallback? onOpenContests;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -25,8 +28,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, String> _handles = {};
   final Map<String, PlatformProfile> _profiles = {};
   final Map<String, String> _errors = {};
+  final Map<String, List<Map<String, dynamic>>> _snapshots = {};
   List<Contest> _contests = [];
   String? _userName;
+  int _weeklyGoal = 50;
   bool _loading = false;
 
   @override
@@ -38,6 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _load() async {
     _handles = await _store.loadHandles();
     _userName = await AuthService.instance.name();
+    _weeklyGoal = await _store.loadWeeklyGoal();
     if (mounted) setState(() {});
     await _refresh();
   }
@@ -53,6 +59,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _errors.remove(entry.key);
         } catch (err) {
           _errors[entry.key] = 'Failed to load: $err';
+        }
+      }),
+      ..._handles.entries.map((entry) async {
+        try {
+          _snapshots[entry.key] =
+              await _api.fetchSnapshots(entry.key, entry.value);
+        } catch (_) {
+          // Best-effort; the weekly card simply shows fewer bars.
         }
       }),
       () async {
@@ -95,12 +109,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _handles.remove(platform);
         _profiles.remove(platform);
         _errors.remove(platform);
+        _snapshots.remove(platform);
       } else {
         _handles[platform] = handle;
       }
     });
     await _store.saveHandles(_handles);
     await _refresh();
+  }
+
+  Future<void> _editGoal() async {
+    final controller = TextEditingController(text: '$_weeklyGoal');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Weekly goal'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration:
+              const InputDecoration(labelText: 'Problems to solve per week'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, int.tryParse(controller.text.trim())),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result < 1) return;
+    setState(() => _weeklyGoal = result);
+    await _store.saveWeeklyGoal(result);
   }
 
   // --- platform helpers --------------------------------------------------
@@ -211,6 +257,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // --- weekly progress ----------------------------------------------------
+
+  String _dateKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  /// Per-date solved deltas across all platforms, computed from consecutive
+  /// daily snapshots. A platform's first-ever snapshot contributes nothing
+  /// (no baseline), so linking a new handle doesn't spike the chart.
+  Map<String, int> _dailyDeltas() {
+    final deltas = <String, int>{};
+    for (final list in _snapshots.values) {
+      for (var i = 1; i < list.length; i++) {
+        final prev = list[i - 1]['solvedCount'];
+        final cur = list[i]['solvedCount'];
+        if (prev is! num || cur is! num) continue;
+        final delta = (cur - prev).toInt();
+        if (delta <= 0) continue;
+        final date = '${list[i]['date']}';
+        deltas[date] = (deltas[date] ?? 0) + delta;
+      }
+    }
+    return deltas;
+  }
+
+  /// Solved count per day for the current week, Monday..Sunday.
+  List<int> _weekValues() {
+    final deltas = _dailyDeltas();
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    return [
+      for (var i = 0; i < 7; i++)
+        deltas[_dateKey(monday.add(Duration(days: i)))] ?? 0,
+    ];
+  }
+
   // --- UI -----------------------------------------------------------------
 
   @override
@@ -243,6 +327,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          _weeklyProgress(),
           const SizedBox(height: 20),
           _contestsPreview(),
           const SizedBox(height: 12),
@@ -505,6 +591,174 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _weeklyProgress() {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.primary;
+    final values = _weekValues();
+    final total = values.fold<int>(0, (sum, v) => sum + v);
+    final progress = _weeklyGoal > 0 ? total / _weeklyGoal : 0.0;
+    final pct = (progress * 100).round();
+    final message = progress >= 1
+        ? 'Goal smashed! \u{1F389}'
+        : progress >= 0.7
+            ? 'Great pace! \u{1F525}'
+            : progress > 0
+                ? 'Keep going! \u{1F4AA}'
+                : 'Let\'s get solving!';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Weekly Progress',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              tooltip: 'Set weekly goal',
+              onPressed: _editGoal,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 130,
+                        child: _weeklyBars(values, color),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      children: [
+                        SizedBox(
+                          width: 62,
+                          height: 62,
+                          child: CircularProgressIndicator(
+                            value: progress.clamp(0.0, 1.0),
+                            strokeWidth: 7,
+                            strokeCap: StrokeCap.round,
+                            backgroundColor: color.withOpacity(0.15),
+                            color: color,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '$total',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' / $_weeklyGoal',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text('This Week', style: theme.textTheme.bodySmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$pct% of goal',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4CAF50),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(message, style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ],
+                ),
+                if (total == 0) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Bars fill in from daily snapshots - open the app each '
+                    'day so it can record your solved counts.',
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _weeklyBars(List<int> values, Color color) {
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final maxValue = values.fold<int>(0, (m, v) => v > m ? v : m);
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: (maxValue == 0 ? 1 : maxValue) * 1.2,
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        barTouchData: BarTouchData(enabled: false),
+        titlesData: FlTitlesData(
+          leftTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              getTitlesWidget: (value, meta) => Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  labels[value.toInt()],
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
+            ),
+          ),
+        ),
+        barGroups: [
+          for (var i = 0; i < 7; i++)
+            BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: values[i].toDouble(),
+                  width: 14,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(4)),
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [color.withOpacity(0.55), color],
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _contestsPreview() {
     final theme = Theme.of(context);
     final now = DateTime.now();
@@ -519,17 +773,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Upcoming Contests',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Upcoming Contests',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            TextButton(
+              onPressed: widget.onOpenContests,
+              child: const Text('View all'),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
         Card(
           child: Column(
             children: [
               for (final c in next)
                 ListTile(
+                  onTap: widget.onOpenContests,
+                  trailing: const Icon(Icons.chevron_right, size: 18),
                   leading: Container(
                     width: 48,
                     height: 44,
