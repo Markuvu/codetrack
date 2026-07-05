@@ -9,7 +9,6 @@ import '../models/flashcard.dart';
 class AppStore {
   static const _handlesKey = 'handles';
   static const _cardsKey = 'flashcards';
-  static const _friendsKey = 'friends_codeforces';
 
   Future<Map<String, String>> loadHandles() async {
     final prefs = await SharedPreferences.getInstance();
@@ -40,13 +39,17 @@ class AppStore {
     );
   }
 
-  Future<List<String>> loadFriends() async {
+  // Friends are stored per platform ('friends_codeforces', 'friends_leetcode',
+  // ...). The codeforces key predates multi-platform support, so existing
+  // friend lists carry over unchanged.
+  Future<List<String>> loadFriends([String platform = 'codeforces']) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_friendsKey) ?? [];
+    return prefs.getStringList('friends_$platform') ?? [];
   }
 
-  Future<void> saveFriends(List<String> friends) async {
+  Future<void> saveFriends(List<String> friends,
+      [String platform = 'codeforces']) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_friendsKey, friends);
+    await prefs.setStringList('friends_$platform', friends);
   }
 }
