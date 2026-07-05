@@ -3,6 +3,7 @@ import { getCodeforcesContests } from "./codeforces.js"
 
 // CLIST (https://clist.by) aggregates contests across nearly every judge.
 // Sign up for a free API key: https://clist.by/api/v4/doc/
+const CLIST_CONTESTS_URL = "https://clist.by/api/v4/contest/"
 const RESOURCES = ["codeforces.com", "leetcode.com", "codechef.com", "atcoder.jp"]
 
 export async function getUpcomingContests() {
@@ -13,10 +14,12 @@ export async function getUpcomingContests() {
     return getCodeforcesContests()
   }
 
-  const { data } = await axios.get("https://clist.by/api/v4/contest/", {
+  const { data } = await axios.get(CLIST_CONTESTS_URL, {
     params: {
       upcoming: "true",
-      resource: RESOURCES.join(","),
+      // Multi-value filters use the Django-style __in suffix. A plain
+      // `resource=a,b,c` matches nothing and yields an empty list.
+      resource__in: RESOURCES.join(","),
       order_by: "start",
       limit: 50,
     },
@@ -24,7 +27,7 @@ export async function getUpcomingContests() {
     timeout: 15000,
   })
 
-  return (data.objects ?? []).map((c) => {
+  const contests = (data.objects ?? []).map((c) => {
     const startIso = c.start.endsWith("Z") ? c.start : `${c.start}Z` // CLIST times are UTC
     return {
       id: `clist-${c.id}`,
@@ -35,4 +38,11 @@ export async function getUpcomingContests() {
       url: c.href,
     }
   })
+
+  // If CLIST unexpectedly returns nothing, show Codeforces contests rather
+  // than an empty screen.
+  if (contests.length === 0) {
+    return getCodeforcesContests()
+  }
+  return contests
 }
