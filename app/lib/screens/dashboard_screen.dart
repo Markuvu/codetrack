@@ -30,9 +30,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<String, String> _errors = {};
   final Map<String, List<Map<String, dynamic>>> _snapshots = {};
 
-  /// Per-platform accepted-solve timestamps (Codeforces, LeetCode, AtCoder).
-  /// Real history covers the whole week even for handles linked mid-week;
-  /// platforms without it (CodeChef, GFG) fall back to snapshot deltas.
+  /// Per-platform accepted-solve timestamps (Codeforces, LeetCode, CodeChef,
+  /// AtCoder). Real history covers the whole week even for handles linked
+  /// mid-week; platforms without it (GFG) fall back to snapshot deltas.
   final Map<String, List<DateTime>> _activity = {};
 
   List<Contest> _contests = [];
@@ -172,6 +172,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // --- platform helpers --------------------------------------------------
+
+  /// Card order: rated platforms first, then GFG with a coding score (it has
+  /// no contest rating), then connected-but-unrated (incl. loading/errored),
+  /// then unconnected last. Ties keep the canonical kPlatforms order.
+  List<String> _orderedPlatforms() {
+    int rank(String platform) {
+      if (!_handles.containsKey(platform)) return 3; // unconnected -> last
+      final profile = _profiles[platform];
+      if (profile == null) return 2; // still loading or errored
+      if (platform == 'gfg') {
+        return profile.raw['codingScore'] != null ? 1 : 2;
+      }
+      return profile.rating != null ? 0 : 2; // rated -> first
+    }
+
+    final base = {
+      for (var i = 0; i < kPlatforms.length; i++) kPlatforms[i]: i,
+    };
+    final ordered = [...kPlatforms]..sort((a, b) {
+        final byRank = rank(a).compareTo(rank(b));
+        return byRank != 0 ? byRank : base[a]!.compareTo(base[b]!);
+      });
+    return ordered;
+  }
 
   String _metricLabel(String platform) =>
       platform == 'gfg' ? 'Coding Score' : 'Rating';
@@ -360,7 +384,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                for (final platform in kPlatforms) _platformCard(platform),
+                for (final platform in _orderedPlatforms())
+                  _platformCard(platform),
               ],
             ),
           ),
@@ -728,9 +753,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (total == 0) ...[
                   const SizedBox(height: 10),
                   Text(
-                    'Codeforces, LeetCode and AtCoder count from your real '
-                    'submission history. CodeChef and GFG use daily '
-                    'snapshots, so they start counting a day after linking.',
+                    'Codeforces, LeetCode, CodeChef and AtCoder count from '
+                    'your real submission history. GFG uses daily snapshots, '
+                    'so it starts counting a day after linking.',
                     style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                     textAlign: TextAlign.center,
                   ),

@@ -15,15 +15,16 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 - Greeting ("Hey, <name>") - prefers the account name, falls back to first handle
 - **Overview card**: Problems Solved / Contests Participated / Platforms Linked icon tiles
-- **Horizontal platform cards** (175px wide): real platform logo, headline metric (Rating, or Coding Score for GFG), two sub-stats per platform, rating **sparkline** (last 25 points of `ratingHistory`), badge pill (CF rank, LC top-%, CC stars, AtCoder max, GFG streak), "+ Add handle" empty state
-- **Weekly Progress card**: Mon-Sun bar chart of problems solved per day + **goal ring** with `solved / goal`, percent, and a pace message. Codeforces / LeetCode / AtCoder counts come from **real per-submission history** (`/api/activity`), bucketed in the device's local timezone, so the whole week is covered even if a handle was linked mid-week; CodeChef / GFG have no public history and fall back to daily snapshot deltas. Goal is editable (pencil icon), stored locally (`weekly_goal`, default 50)
+- **Horizontal platform cards** (175px wide): real platform logo, headline metric (Rating, or Coding Score for GFG), two sub-stats per platform, rating **sparkline** (last 25 points of `ratingHistory` - incl. CodeChef via `all_rating`), badge pill (CF rank, LC top-%, CC stars, AtCoder max, GFG streak), "+ Add handle" empty state
+- **Card ordering**: rated platforms first, then GFG with a coding score (it has no contest rating), then connected-but-unrated (incl. loading/errored), then unconnected last; ties keep the canonical order (CF, LC, CC, AtCoder, GFG)
+- **Weekly Progress card**: Mon-Sun bar chart of problems solved per day + **goal ring** with `solved / goal`, percent, and a pace message. Codeforces / LeetCode / CodeChef / AtCoder counts come from **real per-submission history** (`/api/activity`), bucketed in the device's local timezone, so the whole week is covered even if a handle was linked mid-week; GFG has no public history and falls back to daily snapshot deltas. Goal is editable (pencil icon), stored locally (`weekly_goal`, default 50)
 - **Upcoming Contests preview**: next 3 contests with month/day date boxes and countdown; **View all** button and tapping any row jumps to the Contests tab
 - Pull-to-refresh forces fresh fetches (`fresh=1`) so a solve from moments ago shows up immediately
 - Tap a card to add/edit that platform's handle
 
 ## Contests (tab 2)
 
-- Aggregated upcoming contests (CLIST) with **platform filter chips** (with counts and logos)
+- Aggregated upcoming contests (CLIST) with **platform filter chips** (counts + logos) laid out in a **wrap** - every platform visible at once, no horizontal scrolling; compact density, tapping the active chip clears the filter
 - Colored cards: platform logo, name, local start time, duration, platform pill, live countdown pill
 - **Reminders** (Android only; snackbar explains on web):
   - Bell -> bottom sheet lead-time picker: 10 min / 30 min / 1 h / 1 day before (past options disabled)

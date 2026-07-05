@@ -208,6 +208,24 @@ class _ContestsScreenState extends State<ContestsScreen> {
 
   // --- UI ---------------------------------------------------------------
 
+  /// Compact filter chip; chips are laid out in a [Wrap] so every platform
+  /// is visible at once (no horizontal scrolling).
+  Widget _filterChip({
+    Widget? avatar,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return FilterChip(
+      avatar: avatar,
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Contest>>(
@@ -260,45 +278,41 @@ class _ContestsScreenState extends State<ContestsScreen> {
 
         return Column(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 56,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        FilterChip(
-                          label: Text('All (${contests.length})'),
+                        _filterChip(
+                          label: 'All (${contests.length})',
                           selected: _filter == null,
-                          onSelected: (_) => setState(() => _filter = null),
+                          onTap: () => setState(() => _filter = null),
                         ),
-                        for (final k in keys) ...[
-                          const SizedBox(width: 8),
-                          FilterChip(
+                        for (final k in keys)
+                          _filterChip(
                             avatar: PlatformLogo(k, size: 18),
-                            label: Text(
-                              '${platformDisplayName(k)} '
-                              '(${contests.where((c) => _key(c.platform) == k).length})',
-                            ),
+                            label:
+                                '${platformDisplayName(k)} '
+                                '(${contests.where((c) => _key(c.platform) == k).length})',
                             selected: _filter == k,
-                            onSelected: (selected) => setState(
-                                () => _filter = selected ? k : null),
+                            onTap: () => setState(
+                                () => _filter = _filter == k ? null : k),
                           ),
-                        ],
                       ],
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit_notifications_outlined),
-                  tooltip: 'Manage reminders',
-                  onPressed: _showReminders,
-                ),
-                const SizedBox(width: 4),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.edit_notifications_outlined),
+                    tooltip: 'Manage reminders',
+                    onPressed: _showReminders,
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: RefreshIndicator(
