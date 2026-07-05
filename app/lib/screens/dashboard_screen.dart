@@ -18,10 +18,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Favicon CDN: returns each platform's real logo as a small PNG.
-  static const _faviconBase =
-      'https://www.google.com/s2/favicons?sz=64&domain=';
-
   final _api = ApiClient();
   final _store = AppStore();
 
@@ -30,6 +26,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<String, String> _errors = {};
   List<Contest> _contests = [];
   String? _userName;
+  // Logos are served by our own backend (/api/logo/<platform>) because the
+  // favicon CDN blocks direct browser requests with CORS on Flutter web.
+  String? _backendBase;
   bool _loading = false;
 
   @override
@@ -41,6 +40,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _load() async {
     _handles = await _store.loadHandles();
     _userName = await AuthService.instance.name();
+    _backendBase =
+        (await _api.baseUrl()).trim().replaceAll(RegExp(r'/+$'), '');
     if (mounted) setState(() {});
     await _refresh();
   }
@@ -48,6 +49,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _refresh() async {
     setState(() => _loading = true);
     _userName = await AuthService.instance.name();
+    _backendBase =
+        (await _api.baseUrl()).trim().replaceAll(RegExp(r'/+$'), '');
     await Future.wait([
       ..._handles.entries.map((entry) async {
         try {
@@ -125,23 +128,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  String _domain(String platform) {
-    switch (platform) {
-      case 'codeforces':
-        return 'codeforces.com';
-      case 'leetcode':
-        return 'leetcode.com';
-      case 'codechef':
-        return 'codechef.com';
-      case 'atcoder':
-        return 'atcoder.jp';
-      case 'gfg':
-        return 'geeksforgeeks.org';
-      default:
-        return '$platform.com';
-    }
-  }
-
   Color _color(String platform) {
     switch (platform) {
       case 'codeforces':
@@ -161,24 +147,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _logo(String platform, {double size = 24}) {
     final color = _color(platform);
+    final fallback = CircleAvatar(
+      radius: size / 2,
+      backgroundColor: color.withOpacity(0.18),
+      foregroundColor: color,
+      child: Text(
+        _displayName(platform)[0],
+        style: TextStyle(
+          fontSize: size * 0.45,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+    final base = _backendBase;
+    if (base == null || base.isEmpty) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: Image.network(
-        _faviconBase + _domain(platform),
+        '$base/api/logo/$platform',
         width: size,
         height: size,
-        errorBuilder: (context, error, stackTrace) => CircleAvatar(
-          radius: size / 2,
-          backgroundColor: color.withOpacity(0.18),
-          foregroundColor: color,
-          child: Text(
-            _displayName(platform)[0],
-            style: TextStyle(
-              fontSize: size * 0.45,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
+        errorBuilder: (context, error, stackTrace) => fallback,
       ),
     );
   }

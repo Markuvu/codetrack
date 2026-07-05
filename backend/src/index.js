@@ -80,6 +80,45 @@ app.get("/api/contests", async (_req, res) => {
   }
 })
 
+// Platform logos, proxied server-side. Browsers block the favicon CDN with
+// CORS errors when the web app fetches it directly; servers are exempt from
+// CORS, so we fetch here once, cache the bytes, and serve them same-origin.
+const LOGO_DOMAINS = {
+  codeforces: "codeforces.com",
+  leetcode: "leetcode.com",
+  codechef: "codechef.com",
+  atcoder: "atcoder.jp",
+  gfg: "geeksforgeeks.org",
+}
+const FAVICON_BASE = "https://www.google.com/s2/favicons?sz=64&domain="
+const LOGO_TTL_MS = 7 * 24 * 60 * 60 * 1000 // logos basically never change
+const logoCache = new Map() // platform -> { buffer, type, at }
+
+app.get("/api/logo/:platform", async (req, res) => {
+  const { platform } = req.params
+  const domain = LOGO_DOMAINS[platform]
+  if (!domain) {
+    return res.status(404).json({ error: `Unknown platform '${platform}'` })
+  }
+  const cached = logoCache.get(platform)
+  if (cached && Date.now() - cached.at < LOGO_TTL_MS) {
+    return res
+      .type(cached.type)
+      .set("Cache-Control", "public, max-age=86400")
+      .send(cached.buffer)
+  }
+  try {
+    const response = await fetch(FAVICON_BASE + domain)
+    if (!response.ok) throw new Error(`favicon fetch failed (${response.status})`)
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const type = response.headers.get("content-type") || "image/png"
+    logoCache.set(platform, { buffer, type, at: Date.now() })
+    res.type(type).set("Cache-Control", "public, max-age=86400").send(buffer)
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
 // Daily progress snapshots (recorded automatically on fresh profile fetches)
 app.get("/api/snapshots/:platform/:handle", async (req, res) => {
   const { platform, handle } = req.params
