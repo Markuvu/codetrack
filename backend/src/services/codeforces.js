@@ -78,7 +78,8 @@ export async function getCodeforcesRecentSolved(handle, limit = 20) {
 
 /**
  * Accepted solves since sinceMs, deduplicated per problem (earliest AC kept).
- * Powers the weekly-progress chart: [{ id, at }] with `at` in epoch ms.
+ * Powers the weekly-progress chart and the recent-activity feed:
+ * [{ id, name, url, at }] with `at` in epoch ms.
  */
 export async function getCodeforcesRecentActivity(handle, sinceMs) {
   const submissions = await cfGet("user.status", { handle, from: 1, count: 1000 })
@@ -89,9 +90,22 @@ export async function getCodeforcesRecentActivity(handle, sinceMs) {
     if (at < sinceMs) continue
     const key = `${sub.problem.contestId}-${sub.problem.index}`
     const prev = earliest.get(key)
-    if (prev === undefined || at < prev) earliest.set(key, at)
+    if (prev === undefined || at < prev.at) {
+      earliest.set(key, {
+        at,
+        name: sub.problem.name ?? key,
+        url: sub.problem.contestId
+          ? PROBLEM_URL_BASE + sub.problem.contestId + "/problem/" + sub.problem.index
+          : null,
+      })
+    }
   }
-  return [...earliest.entries()].map(([id, at]) => ({ id, at }))
+  return [...earliest.entries()].map(([id, solve]) => ({
+    id,
+    name: solve.name,
+    url: solve.url,
+    at: solve.at,
+  }))
 }
 
 /**

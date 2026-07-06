@@ -3,6 +3,7 @@ import axios from "axios"
 // LeetCode has no official public API; this uses the same GraphQL endpoint the
 // website itself uses. Keep request volume low (responses are cached upstream).
 const GRAPHQL_URL = "https://leetcode.com/graphql"
+const PROBLEM_URL_BASE = "https://leetcode.com/problems/"
 
 const HEADERS = {
   "Content-Type": "application/json",
@@ -78,6 +79,7 @@ export async function getLeetCodeProfile(username) {
 const RECENT_AC_QUERY = `
 query recentAc($username: String!, $limit: Int!) {
   recentAcSubmissionList(username: $username, limit: $limit) {
+    title
     titleSlug
     timestamp
   }
@@ -86,7 +88,8 @@ query recentAc($username: String!, $limit: Int!) {
 /**
  * Recent accepted solves with timestamps, deduplicated per problem (earliest
  * AC kept). LeetCode only exposes the latest ~100 accepted submissions, which
- * comfortably covers a week for most users. [{ id, at }] with `at` in epoch ms.
+ * comfortably covers a week for most users.
+ * [{ id, name, url, at }] with `at` in epoch ms.
  */
 export async function getLeetCodeRecentActivity(username, sinceMs) {
   const { data } = await axios.post(
@@ -102,9 +105,16 @@ export async function getLeetCodeRecentActivity(username, sinceMs) {
     const at = Number(sub.timestamp) * 1000
     if (!Number.isFinite(at) || at < sinceMs) continue
     const prev = earliest.get(sub.titleSlug)
-    if (prev === undefined || at < prev) earliest.set(sub.titleSlug, at)
+    if (prev === undefined || at < prev.at) {
+      earliest.set(sub.titleSlug, { at, name: sub.title ?? sub.titleSlug })
+    }
   }
-  return [...earliest.entries()].map(([id, at]) => ({ id, at }))
+  return [...earliest.entries()].map(([id, solve]) => ({
+    id,
+    name: solve.name,
+    url: PROBLEM_URL_BASE + id + "/",
+    at: solve.at,
+  }))
 }
 
 const CALENDAR_QUERY = `
