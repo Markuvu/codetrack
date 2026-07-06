@@ -123,8 +123,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _syncHomeWidget() async {
     final values = _weekValues();
     final total = values.fold<int>(0, (sum, v) => sum + v);
+    final now = DateTime.now().toUtc();
+    final todayKey = _dateKey(DateTime.utc(now.year, now.month, now.day));
+    final activeToday =
+        _heatmaps.values.any((days) => (days[todayKey] ?? 0) > 0);
     await WidgetSync.pushStats(
       streak: _currentStreak(),
+      activeToday: activeToday,
       solvedThisWeek: total,
       weeklyGoal: _weeklyGoal,
     );
