@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/contest.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
+import '../services/widget_sync.dart';
 import '../storage/app_store.dart';
 import '../widgets/platform_logo.dart';
 
@@ -136,6 +137,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
       'notifyAtMs': contest.start.subtract(before).millisecondsSinceEpoch,
     });
     await _store.saveReminders(reminders);
+    await WidgetSync.pushNextReminder(reminders);
 
     if (!mounted) return;
     final notifyAt =
@@ -155,7 +157,10 @@ class _ContestsScreenState extends State<ContestsScreen> {
     final now = DateTime.now().millisecondsSinceEpoch;
     final upcoming = all.where((r) => (r['notifyAtMs'] as num) > now).toList()
       ..sort((a, b) => (a['notifyAtMs'] as num).compareTo(b['notifyAtMs'] as num));
-    if (upcoming.length != all.length) await _store.saveReminders(upcoming);
+    if (upcoming.length != all.length) {
+      await _store.saveReminders(upcoming);
+      await WidgetSync.pushNextReminder(upcoming);
+    }
     if (!mounted) return;
 
     await showModalBottomSheet<void>(
@@ -195,6 +200,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
                                 .cancel((r['notifId'] as num).toInt());
                             upcoming.remove(r);
                             await _store.saveReminders(upcoming);
+                            await WidgetSync.pushNextReminder(upcoming);
                             setSheetState(() {});
                           },
                         ),
