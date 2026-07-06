@@ -521,7 +521,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Streak card: flame + current streak with the same motivational subline
-  /// as the home-screen widget, plus the last 7 days as check tiles.
+  /// as the home-screen widget, plus the current Mon-Sun week as check tiles
+  /// (matching the Weekly Progress chart; future days are dimmed).
   /// Hidden until at least one platform has heatmap data.
   Widget _streakSection() {
     if (_heatmaps.values.every((days) => days.isEmpty)) {
@@ -533,6 +534,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final streak = _currentStreak();
     final now = DateTime.now().toUtc();
     final today = DateTime.utc(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
     final activeToday = active.contains(_dateKey(today));
     final message = streak == 0
         ? 'Solve a problem to start a streak'
@@ -572,12 +574,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    for (var i = 6; i >= 0; i--)
+                    for (var i = 0; i < 7; i++)
                       Expanded(
                         child: _dayTile(
-                          today.subtract(Duration(days: i)),
+                          monday.add(Duration(days: i)),
                           active,
                           color,
+                          today,
                         ),
                       ),
                   ],
@@ -591,15 +594,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// One circle in the streak card's 7-day row: filled with a check when the
-  /// day had submissions, outlined when it's today-but-empty, dim otherwise.
-  Widget _dayTile(DateTime day, Set<String> active, Color color) {
+  /// One circle in the streak card's Mon-Sun row: filled with a check when
+  /// the day had submissions, outlined when it's today-but-empty, dim when
+  /// past-and-empty, and near-invisible for future days.
+  Widget _dayTile(
+      DateTime day, Set<String> active, Color color, DateTime today) {
     const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     final theme = Theme.of(context);
     final isActive = active.contains(_dateKey(day));
-    final now = DateTime.now().toUtc();
-    final isToday =
-        _dateKey(day) == _dateKey(DateTime.utc(now.year, now.month, now.day));
+    final isToday = _dateKey(day) == _dateKey(today);
+    final isFuture = day.isAfter(today);
+    final letterColor = isToday
+        ? color
+        : theme.textTheme.bodySmall?.color
+            ?.withOpacity(isFuture ? 0.35 : 1.0);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -608,7 +616,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           height: 28,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isActive ? color : color.withOpacity(0.08),
+            color: isActive ? color : color.withOpacity(isFuture ? 0.03 : 0.08),
             border: isToday && !isActive
                 ? Border.all(color: color, width: 1.5)
                 : null,
@@ -623,7 +631,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           style: TextStyle(
             fontSize: 10,
             fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-            color: isToday ? color : theme.textTheme.bodySmall?.color,
+            color: letterColor,
           ),
         ),
       ],
