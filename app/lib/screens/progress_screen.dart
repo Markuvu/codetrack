@@ -44,6 +44,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
   String? _platform;
   PlatformProfile? _profile;
   List<Map<String, dynamic>> _snapshots = [];
+  TopicStats? _topics;
+  bool _showAllTopics = false;
   String? _error;
   bool _loading = false;
   _ChartKind? _kind; // null = auto (rating when available)
@@ -110,6 +112,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
       _platform = platform;
       _profile = null;
       _snapshots = [];
+      _topics = null;
+      _showAllTopics = false;
       _error = null;
       _kind = null;
     });
@@ -128,9 +132,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
       final results = await Future.wait<dynamic>([
         _api.fetchProfile(platform, handle, fresh: fresh),
         _api.fetchSnapshots(platform, handle),
+        // Topics are best-effort: a failure only hides the topics card.
+        _api
+            .fetchTopics(platform, handle, fresh: fresh)
+            .catchError((_) => null),
       ]);
       _profile = results[0] as PlatformProfile;
       _snapshots = results[1] as List<Map<String, dynamic>>;
+      _topics = results[2] as TopicStats?;
       _orderProfiles[platform] = _profile!;
     } catch (err) {
       _error = 'Failed to load progress: $err';
@@ -318,6 +327,137 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 'Streak'),
             tile(Icons.calendar_month_outlined, '${_snapshots.length}',
                 'Tracked'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Topic-wise breakdown of solved problems, like leetcode.com/progress:
+  /// an Easy/Medium/Hard split (LeetCode) plus per-tag horizontal bars.
+  /// Hidden for platforms without public tag data (CC, AtCoder, GFG).
+  Widget _topicsCard() {
+    final topics = _topics;
+    if (topics == null || topics.topics.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    final color = platformColor(_platform ?? '');
+    final diff = topics.difficulty;
+    final visible = _showAllTopics
+        ? topics.topics
+        : topics.topics.take(10).toList();
+    final maxSolved = topics.topics.first.solved;
+
+    Widget diffTile(String label, int? count, Color c) => Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: c.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '${count ?? '-'}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: c,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        );
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Solved by Topic',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            Text(
+              _platform == 'codeforces'
+                  ? 'A problem counts once per tag, so totals overlap'
+                  : '${topics.topics.length} topics',
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+            ),
+            if (diff != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  diffTile('Easy', diff['easy'], const Color(0xFF4CAF50)),
+                  diffTile('Medium', diff['medium'], const Color(0xFFFFB300)),
+                  diffTile('Hard', diff['hard'], const Color(0xFFEF5350)),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            for (final t in visible)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 118,
+                      child: Text(
+                        t.tag,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: maxSolved > 0 ? t.solved / maxSolved : 0,
+                          minHeight: 7,
+                          backgroundColor: color.withOpacity(0.10),
+                          color: color,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 34,
+                      child: Text(
+                        '${t.solved}',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (topics.topics.length > 10)
+              Center(
+                child: TextButton(
+                  onPressed: () =>
+                      setState(() => _showAllTopics = !_showAllTopics),
+                  child: Text(
+                    _showAllTopics
+                        ? 'Show less'
+                        : 'Show all ${topics.topics.length} topics',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -715,6 +855,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             ),
           if (_profile != null) _statsCard(),
           if (_profile != null) _chartCard(rating, solved),
+          if (_profile != null) _topicsCard(),
         ],
       ),
     );
