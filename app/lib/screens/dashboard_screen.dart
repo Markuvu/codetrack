@@ -136,7 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Union of days ('yyyy-MM-dd', UTC) with at least one submission on any
-  /// platform - shared by the streak card, streak math, and widget sync.
+  /// platform - shared by the overview card, streak math, and widget sync.
   Set<String> _activeDays() {
     final active = <String>{};
     for (final map in _heatmaps.values) {
@@ -461,7 +461,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
           _overviewCard(),
           const SizedBox(height: 20),
-          _streakSection(),
           Text(
             'Platforms',
             style: Theme.of(context)
@@ -520,126 +519,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Streak card: flame + current streak with the same motivational subline
-  /// as the home-screen widget, plus the current Mon-Sun week as check tiles
-  /// (matching the Weekly Progress chart; future days are dimmed).
-  /// Hidden until at least one platform has heatmap data.
-  Widget _streakSection() {
-    if (_heatmaps.values.every((days) => days.isEmpty)) {
-      return const SizedBox.shrink();
-    }
+  /// Hero card: streak headline (flame in a tinted rounded square + day
+  /// count + motivational subline, same logic as the home-screen widget)
+  /// over a slim three-stat row (Solved / Contests / Platforms) separated by
+  /// hairline dividers. Replaces the old icon-tile Overview card and the
+  /// separate streak card.
+  Widget _overviewCard() {
     final theme = Theme.of(context);
     final color = theme.colorScheme.primary;
-    final active = _activeDays();
     final streak = _currentStreak();
     final now = DateTime.now().toUtc();
-    final today = DateTime.utc(now.year, now.month, now.day);
-    final monday = today.subtract(Duration(days: today.weekday - 1));
-    final activeToday = active.contains(_dateKey(today));
+    final activeToday = _activeDays()
+        .contains(_dateKey(DateTime.utc(now.year, now.month, now.day)));
     final message = streak == 0
         ? 'Solve a problem to start a streak'
         : activeToday
             ? 'On fire - keep it up!'
             : 'Solve one today to keep it alive';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    const Text('\u{1F525}', style: TextStyle(fontSize: 30)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            streak == 1
-                                ? '1 day streak'
-                                : '$streak day streak',
-                            style: theme.textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(message, style: theme.textTheme.bodySmall),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    for (var i = 0; i < 7; i++)
-                      Expanded(
-                        child: _dayTile(
-                          monday.add(Duration(days: i)),
-                          active,
-                          color,
-                          today,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  /// One circle in the streak card's Mon-Sun row: filled with a check when
-  /// the day had submissions, outlined when it's today-but-empty, dim when
-  /// past-and-empty, and near-invisible for future days.
-  Widget _dayTile(
-      DateTime day, Set<String> active, Color color, DateTime today) {
-    const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    final theme = Theme.of(context);
-    final isActive = active.contains(_dateKey(day));
-    final isToday = _dateKey(day) == _dateKey(today);
-    final isFuture = day.isAfter(today);
-    final letterColor = isToday
-        ? color
-        : theme.textTheme.bodySmall?.color
-            ?.withOpacity(isFuture ? 0.35 : 1.0);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isActive ? color : color.withOpacity(isFuture ? 0.03 : 0.08),
-            border: isToday && !isActive
-                ? Border.all(color: color, width: 1.5)
-                : null,
-          ),
-          child: isActive
-              ? const Icon(Icons.check, size: 16, color: Colors.white)
-              : null,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          letters[day.weekday - 1],
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-            color: letterColor,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _overviewCard() {
-    final theme = Theme.of(context);
     final totalSolved =
         _profiles.values.fold<int>(0, (sum, p) => sum + (p.solvedCount ?? 0));
     var contests = 0;
@@ -647,47 +543,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final c = p.raw['contestsAttended'];
       if (c is num) contests += c.toInt();
     }
+    final hairline = theme.colorScheme.onSurface.withOpacity(0.08);
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Row(
               children: [
-                const SizedBox(width: 10),
-                Icon(Icons.bar_chart_rounded,
-                    size: 18, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Text(
-                  'Overview',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Text(
+                    '\u{1F525}',
+                    style: TextStyle(fontSize: 24),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        streak == 1 ? '1 day streak' : '$streak day streak',
+                        style: theme.textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Text(message, style: theme.textTheme.bodySmall),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            Container(height: 1, color: hairline),
+            const SizedBox(height: 12),
             Row(
               children: [
-                _overviewTile(
-                  Icons.task_alt,
-                  const Color(0xFF9C7BFF),
-                  '$totalSolved',
-                  'Problems Solved',
-                ),
-                _overviewTile(
-                  Icons.calendar_month_outlined,
-                  const Color(0xFF4CAF50),
-                  '$contests',
-                  'Contests Participated',
-                ),
-                _overviewTile(
-                  Icons.link,
-                  const Color(0xFF5C9DFF),
-                  '${_handles.length}',
-                  'Platforms Linked',
-                ),
+                _overviewStat('$totalSolved', 'Solved'),
+                Container(width: 1, height: 28, color: hairline),
+                _overviewStat('$contests', 'Contests'),
+                Container(width: 1, height: 28, color: hairline),
+                _overviewStat('${_handles.length}', 'Platforms'),
               ],
             ),
           ],
@@ -696,27 +599,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _overviewTile(
-      IconData icon, Color color, String value, String label) {
+  Widget _overviewStat(String value, String label) {
     final theme = Theme.of(context);
     return Expanded(
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: color.withOpacity(0.15),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(height: 8),
           Text(
             value,
-            style: theme.textTheme.titleLarge
+            style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 2),
           Text(
             label,
             style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
