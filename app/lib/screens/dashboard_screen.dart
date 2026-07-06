@@ -31,10 +31,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<String, String> _errors = {};
   final Map<String, List<Map<String, dynamic>>> _snapshots = {};
 
-  /// Per-platform accepted-solve timestamps (Codeforces, LeetCode, CodeChef,
-  /// AtCoder). Real history covers the whole week even for handles linked
-  /// mid-week; platforms without it (GFG) fall back to snapshot deltas.
-  final Map<String, List<DateTime>> _activity = {};
+  /// Per-platform accepted solves (Codeforces, LeetCode, CodeChef, AtCoder)
+  /// with problem names/links. Real history covers the whole week even for
+  /// handles linked mid-week; platforms without it (GFG) fall back to
+  /// snapshot deltas. Also powers the Recent Solves feed.
+  final Map<String, List<Solve>> _activity = {};
 
   /// Per-platform heatmap data ('yyyy-MM-dd' -> submissions) for the unified
   /// activity calendar. GFG has no public per-day history, so it is absent.
@@ -222,6 +223,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return profile.rating?.toString() ?? '-';
   }
 
+  /// Highest rating ever reached, from the contest history. Used for
+  /// LeetCode, which exposes no maxRating field of its own.
+  int? _peakFromHistory(PlatformProfile p) {
+    final history = p.raw['ratingHistory'];
+    if (history is! List) return null;
+    int? peak;
+    for (final point in history) {
+      if (point is! Map) continue;
+      final r = point['newRating'];
+      if (r is num && (peak == null || r > peak)) peak = r.toInt();
+    }
+    return peak;
+  }
+
+  /// '#40707' -> '#40.7K' so long global ranks fit the narrow stat columns.
+  String _compactRank(dynamic rank) {
+    if (rank is! num) return '-';
+    if (rank >= 10000) {
+      final k = rank / 1000;
+      return '#${k.toStringAsFixed(k >= 100 ? 0 : 1)}K';
+    }
+    return '#${rank.toInt()}';
+  }
+
   List<MapEntry<String, String>> _subStats(
       String platform, PlatformProfile p) {
     final raw = p.raw;
@@ -231,10 +256,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return [MapEntry('Max Rating', '${raw['maxRating'] ?? '-'}'), solved];
       case 'leetcode':
         return [
-          MapEntry(
-            'Global Rank',
-            raw['globalRanking'] != null ? '#${raw['globalRanking']}' : '-',
-          ),
+          MapEntry('Peak', '${_peakFromHistory(p) ?? '-'}'),
+          MapEntry('Rank', _compactRank(raw['globalRanking'])),
           solved,
         ];
       case 'codechef':
@@ -356,8 +379,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final values = List<int>.filled(7, 0);
 
     for (final solves in _activity.values) {
-      for (final at in solves) {
-        final local = at.toLocal();
+      for (final solve in solves) {
+        final local = solve.at.toLocal();
         final day = DateTime(local.year, local.month, local.day);
         final i = day.difference(monday).inDays;
         if (i >= 0 && i < 7) values[i] += 1;
@@ -408,6 +431,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _weeklyProgress(),
           const SizedBox(height: 20),
           _activitySection(),
+          _recentActivity(),
           _contestsPreview(),
           const SizedBox(height: 12),
           Text(
@@ -670,7 +694,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Unified activity calendar merging every platform's submissions into one
-  /// GitHub-style heatmap. Hidden until at least one platform has data.
+  /// LeetCode-style heatmap. Hidden until at least one platform has data.
   Widget _activitySection() {
     final hasData = _heatmaps.values.any((days) => days.isNotEmpty);
     if (!hasData) return const SizedBox.shrink();
@@ -688,6 +712,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: ActivityHeatmap(byPlatform: _heatmaps),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  String _timeAgo(DateTime at) {
+    final diff = DateTime.now().difference(at.toLocal());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'yesterday';
+    return '${diff.inDays} days ago';
+  }
+
+  /// Latest accepted solves across every platform, newest first - a merged
+  /// feed built from the same `/api/activity` data as Weekly Progress.
+  Widget _recentActivity() {
+    final theme = Theme.of(context);
+    final entries = <MapEntry<String, Solve>>[];
+    _activity.forEach((platform, solves) {
+      for (final solve in solves) {
+        entries.add(MapEntry(platform, solve));
+      }
+    });
+    if (entries.isEmpty) return const SizedBox.shrink();
+    entries.sort((a, b) => b.value.at.compareTo(a.value.at));
+    final recent = entries.take(8).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Recent Solves',
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Card(
+          child: Column(
+            children: [
+              for (final entry in recent)
+                ListTile(
+                  dense: true,
+                  leading:
+                      PlatformLogo(entry.key, size: 22, backdrop: true),
+                  title: Text(
+                    entry.value.name ?? entry.value.id,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${platformDisplayName(entry.key)}'
+                    ' \u00B7 ${_timeAgo(entry.value.at)}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  trailing: const Icon(Icons.check_circle_outline,
+                      size: 16, color: Color(0xFF4CAF50)),
+                ),
+            ],
           ),
         ),
         const SizedBox(height: 20),
