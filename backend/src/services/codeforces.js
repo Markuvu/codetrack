@@ -137,6 +137,32 @@ export async function getCodeforcesHeatmap(handle, sinceMs) {
   return days
 }
 
+/**
+ * Topic-wise solved counts aggregated from the submission history: every
+ * uniquely solved problem contributes each of its Codeforces tags once.
+ * Problems usually carry several tags, so the counts intentionally sum to
+ * more than solvedCount. Returns { topics: [{ tag, solved }] } sorted by
+ * count descending.
+ */
+export async function getCodeforcesTopics(handle) {
+  const submissions = await cfGet("user.status", { handle, from: 1, count: 5000 })
+  const seen = new Set()
+  const counts = new Map()
+  for (const sub of submissions) {
+    if (sub.verdict !== "OK" || !sub.problem) continue
+    const key = `${sub.problem.contestId}-${sub.problem.index}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    for (const tag of sub.problem.tags ?? []) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1)
+    }
+  }
+  const topics = [...counts.entries()]
+    .map(([tag, solved]) => ({ tag, solved }))
+    .sort((a, b) => b.solved - a.solved)
+  return { topics }
+}
+
 export async function getCodeforcesContests() {
   const contests = await cfGet("contest.list", {})
   return contests

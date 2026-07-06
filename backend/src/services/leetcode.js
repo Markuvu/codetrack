@@ -156,3 +156,48 @@ export async function getLeetCodeHeatmap(username) {
   }
   return days
 }
+
+const SKILL_STATS_QUERY = `
+query skillStats($username: String!) {
+  matchedUser(username: $username) {
+    tagProblemCounts {
+      advanced { tagName problemsSolved }
+      intermediate { tagName problemsSolved }
+      fundamental { tagName problemsSolved }
+    }
+    submitStatsGlobal { acSubmissionNum { difficulty count } }
+  }
+}`
+
+/**
+ * Topic-wise solved counts, mirroring leetcode.com/progress. LeetCode groups
+ * its tags into fundamental / intermediate / advanced skill buckets; we merge
+ * them into one list (keeping the level) sorted by problems solved, and also
+ * return the Easy/Medium/Hard split.
+ * Returns { difficulty: { easy, medium, hard, all }, topics: [{ tag, solved, level }] }.
+ */
+export async function getLeetCodeTopics(username) {
+  const { data } = await axios.post(
+    GRAPHQL_URL,
+    { query: SKILL_STATS_QUERY, variables: { username } },
+    { headers: HEADERS, timeout: 15000 },
+  )
+  const user = data?.data?.matchedUser
+  if (!user) throw new Error(`LeetCode user '${username}' not found`)
+
+  const difficulty = {}
+  for (const s of user.submitStatsGlobal?.acSubmissionNum ?? []) {
+    if (s?.difficulty) difficulty[s.difficulty.toLowerCase()] = s.count
+  }
+
+  const topics = []
+  const groups = user.tagProblemCounts ?? {}
+  for (const level of ["fundamental", "intermediate", "advanced"]) {
+    for (const t of groups[level] ?? []) {
+      if (!t?.tagName || !t.problemsSolved) continue
+      topics.push({ tag: t.tagName, solved: t.problemsSolved, level })
+    }
+  }
+  topics.sort((a, b) => b.solved - a.solved)
+  return { difficulty, topics }
+}
