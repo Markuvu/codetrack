@@ -27,9 +27,12 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 ## Home-screen widget (Android)
 
-- **Animated launcher widget** (`home_widget` package + native `CodeTrackWidgetProvider`): a `ViewFlipper` auto-cycles every 4s with slide transitions between three panes - **current streak** (consecutive active days from the merged heatmap, UTC days; counts up to yesterday if today has no solves yet), **weekly progress** (`solved / goal` + tinted progress bar), and the **next contest reminder** (contest name + notify time)
-- Tapping the widget opens the app; dark rounded background matching the app theme
-- Data flow: `lib/services/widget_sync.dart` saves `streak_text` / `progress_text` / `progress_pct` / `reminder_text` via `HomeWidget.saveWidgetData` and triggers a widget update. Synced after every Dashboard refresh, on weekly-goal edits, and whenever reminders are set / cancelled / pruned; also refreshed by the system every 30 min (`updatePeriodMillis`)
+- **Animated launcher widget** (`home_widget` package + native `CodeTrackWidgetProvider`): a `ViewFlipper` auto-cycles every 4s with slide transitions between three panes, each laid out as a **big emoji icon + label / value / subline** column:
+  - **\uD83D\uDD25 Current streak** - consecutive active days from the merged heatmap (UTC days; counts up to yesterday if today has no solves yet), with a **motivational subline**: celebrates when today is already active, otherwise nudges "Solve one today to keep it alive" (or "Solve a problem to start one" at streak 0)
+  - **\uD83D\uDCC8 Weekly progress** - `solved / goal - pct%` plus a tinted progress bar
+  - **\u23F0 Next reminder** - the **platform name** as the headline (short and readable vs. long contest titles) with the notify time underneath (`Notifies Sat, 7:30 PM`); empty state "No reminders / Tap a contest bell to set one"
+- Tapping the widget opens the app; **gradient** dark rounded background (135deg, `#2A2440` -> `#17151F`) matching the app theme
+- Data flow: `lib/services/widget_sync.dart` saves `streak_text` / `streak_sub` / `progress_text` / `progress_pct` / `reminder_platform` / `reminder_time` via `HomeWidget.saveWidgetData` and triggers a widget update. Synced after every Dashboard refresh (which also passes whether today is active, for the streak subline), on weekly-goal edits, and whenever reminders are set / cancelled / pruned; also refreshed by the system every 30 min (`updatePeriodMillis`)
 - Sync is fire-and-forget: no-ops on web and swallows errors, so the app never breaks if the native side isn't installed
 - Native files (Kotlin provider, layout, widget info, background drawable) are **committed under `app/android/...`** even though the rest of `android/` is machine-local; manifest receiver registration + package-name check are manual steps documented in `app/README.md`
 
