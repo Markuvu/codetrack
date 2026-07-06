@@ -14,7 +14,7 @@ State of the Flutter app as of v0.4.x (July 2026).
 Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 - Greeting ("Hey, <name>") - prefers the account name, falls back to first handle
-- **Overview card**: Problems Solved / Contests Participated / Platforms Linked icon tiles
+- **Overview hero card**: streak headline (flame emoji in a tinted rounded square + `N day streak` + a motivational subline - same data/logic as the home-screen widget: consecutive active days from the merged heatmap, UTC, counting up to yesterday when today has no solves yet) over a slim three-stat row (**Solved / Contests / Platforms**) separated by hairline dividers. This replaced the old icon-tile Overview card *and* a short-lived separate streak card with per-day tiles: day tiles were dropped because both rolling-7-day and Mon-Sun tile layouts confused or contradicted the streak number at week boundaries - the headline number is the single source of truth, and the calendar-week story belongs to the Weekly Progress card
 - **Horizontal platform cards** (175px wide): real platform logo, headline metric (Rating, or Coding Score for GFG), sub-stats per platform (**LeetCode shows Peak / Rank / Solved** - peak is derived as the highest point of the contest-rating history since LeetCode exposes no `maxRating`, and long global ranks are compacted like `#40.7K`; other platforms show two sub-stats), rating **sparkline** (last 25 points of `ratingHistory` - CF, LC via `userContestRankingHistory`, CC via `all_rating`, AtCoder), badge pill (CF rank, LC top-%, CC stars, AtCoder max, GFG streak), "+ Add handle" empty state
 - **Card ordering**: rated platforms first, then GFG with a coding score (it has no contest rating), then connected-but-unrated (incl. loading/errored), then unconnected last; ties keep the canonical order (CF, LC, CC, AtCoder, GFG)
 - **Weekly Progress card**: Mon-Sun bar chart of problems solved per day + **goal ring** with `solved / goal`, percent, and a pace message. Codeforces / LeetCode / CodeChef / AtCoder counts come from **real per-submission history** (`/api/activity`), bucketed in the device's local timezone, so the whole week is covered even if a handle was linked mid-week; GFG has no public history and falls back to daily snapshot deltas. Goal is editable (pencil icon), stored locally (`weekly_goal`, default 50)
@@ -31,6 +31,7 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
   - **\uD83D\uDD25 Current streak** - consecutive active days from the merged heatmap (UTC days; counts up to yesterday if today has no solves yet), with a **motivational subline**: celebrates when today is already active, otherwise nudges "Solve one today to keep it alive" (or "Solve a problem to start one" at streak 0)
   - **\uD83D\uDCC8 Weekly progress** - `solved / goal - pct%` plus a tinted progress bar
   - **\u23F0 Next reminder** - the **platform name** as the headline (short and readable vs. long contest titles) with the notify time underneath (`Notifies Sat, 7:30 PM`); empty state "No reminders / Tap a contest bell to set one"
+- Pane emoji are set **from Kotlin** (`setTextViewText`), not in the layout XML: AAPT silently drops 4-byte emoji (UTF-16 surrogate pairs) from XML string attributes, so only BMP characters like \u23F0 survive there
 - Tapping the widget opens the app; **gradient** dark rounded background (135deg, `#2A2440` -> `#17151F`) matching the app theme
 - Data flow: `lib/services/widget_sync.dart` saves `streak_text` / `streak_sub` / `progress_text` / `progress_pct` / `reminder_platform` / `reminder_time` via `HomeWidget.saveWidgetData` and triggers a widget update. Synced after every Dashboard refresh (which also passes whether today is active, for the streak subline), on weekly-goal edits, and whenever reminders are set / cancelled / pruned; also refreshed by the system every 30 min (`updatePeriodMillis`)
 - Sync is fire-and-forget: no-ops on web and swallows errors, so the app never breaks if the native side isn't installed
@@ -61,6 +62,11 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
   - **touch tooltips**: rating, date, and contest name (or solved count + date)
   - gradient area fill, dots when <=30 points, **delta pill** (+/- net change from the first to the last visible point, green/red, with an explanatory tooltip)
   - **Rating / Solved toggle** (SegmentedButton) when both series have data; auto-falls back to solved-over-time when there's no rating history
+- **Solved by Topic card** (modeled on leetcode.com/progress, via `/api/topics`):
+  - **LeetCode**: Easy / Medium / Hard split as green/amber/red count tiles, then per-tag bars from the skillStats tag buckets
+  - **Codeforces**: per-tag bars aggregated from the submission history; the caption notes that a problem counts once per tag, so totals overlap
+  - Horizontal bars scaled to the top topic, in the platform color, count on the right; shows the **top 10** with a `Show all N topics` toggle
+  - Best-effort: hidden for platforms without tag data (CodeChef / AtCoder / GFG) and on fetch failure - never blocks the rest of the tab
 - Friendlier empty states (no linked handles / not enough snapshot data yet)
 
 ## Cards / Flashcards (tab 4)

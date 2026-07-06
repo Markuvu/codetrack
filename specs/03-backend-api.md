@@ -31,6 +31,14 @@ Per-day submission counts for the unified activity calendar: `{ supported, days:
 - **gfg**: no public per-day history -> `{ supported: false, days: {} }`; excluded from the merged calendar
 - `days` 1-366 (default 365). Cached 6h; `fresh=1` bypasses with a 5-min cooldown
 
+### `GET /api/topics/:platform/:handle[?fresh=1]`
+Topic categorization of solved problems (modeled on leetcode.com/progress): `{ supported, topics: [{ tag, solved }], difficulty? }`, topics sorted by solved count descending.
+
+- **leetcode**: GraphQL `skillStats` - tag counts merged from the fundamental / intermediate / advanced skill buckets (each topic also carries its `level`), plus `difficulty` = the Easy/Medium/Hard/all solved split
+- **codeforces**: aggregated from `user.status` (up to 5000 submissions): each uniquely solved problem counts **once per tag**. Problems usually carry several tags, so topic totals intentionally sum to more than `solvedCount`. No `difficulty`
+- **codechef / atcoder / gfg**: no public per-problem tags -> `{ supported: false, topics: [] }`
+- Cached 6h; `fresh=1` bypasses with a 5-min cooldown
+
 ### `GET /api/contests`
 `{ contests: [{ id, platform, name, startsAt, durationSeconds, url }] }` - upcoming contests via CLIST v4 (`resource__in` filter), Codeforces API fallback when empty. Cached 3h.
 
@@ -60,6 +68,7 @@ Binary image (PNG/ICO) for the platform's logo, proxied server-side to avoid bro
 | Profiles | 6 h (bypassable with `fresh=1`, 5-min cooldown) |
 | Activity | 10 min (bypassable with `fresh=1`, 60s cooldown) |
 | Heatmap | 6 h (bypassable with `fresh=1`, 5-min cooldown) |
+| Topics | 6 h (bypassable with `fresh=1`, 5-min cooldown) |
 | Contests | 3 h |
 | Recent solved | 1 h |
 | Logos | 7 d in memory, 1 d client cache |
