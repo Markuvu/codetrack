@@ -28,6 +28,13 @@ class CodeTrackWidgetProvider : AppWidgetProvider() {
         val prefs = HomeWidgetPlugin.getData(context)
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.codetrack_widget).apply {
+                // Pane emoji are set here rather than in the layout XML:
+                // fire and chart are 4-byte emoji (surrogate pairs), which
+                // AAPT silently drops from XML string attributes.
+                setTextViewText(R.id.streak_icon, "\uD83D\uDD25")
+                setTextViewText(R.id.progress_icon, "\uD83D\uDCC8")
+                setTextViewText(R.id.reminder_icon, "\u23F0")
+
                 // Pane 1: streak
                 setTextViewText(
                     R.id.streak_value,

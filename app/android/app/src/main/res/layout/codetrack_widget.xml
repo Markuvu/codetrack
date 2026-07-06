@@ -8,7 +8,10 @@
     android:paddingHorizontal="16dp"
     android:paddingVertical="12dp">
 
-    <!-- Auto-cycling slide transition between the three panes. -->
+    <!-- Auto-cycling slide transition between the three panes.
+         NOTE: pane emoji are set from CodeTrackWidgetProvider.kt - 4-byte
+         emoji (fire, chart) need surrogate pairs, which the Android XML
+         resource compiler silently drops. -->
     <ViewFlipper
         android:id="@+id/widget_flipper"
         android:layout_width="match_parent"
@@ -26,9 +29,9 @@
             android:orientation="horizontal">
 
             <TextView
+                android:id="@+id/streak_icon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="\uD83D\uDD25"
                 android:textSize="30sp" />
 
             <LinearLayout
@@ -75,9 +78,9 @@
             android:orientation="horizontal">
 
             <TextView
+                android:id="@+id/progress_icon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="\uD83D\uDCC8"
                 android:textSize="30sp" />
 
             <LinearLayout
@@ -125,9 +128,9 @@
             android:orientation="horizontal">
 
             <TextView
+                android:id="@+id/reminder_icon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="\u23F0"
                 android:textSize="30sp" />
 
             <LinearLayout
