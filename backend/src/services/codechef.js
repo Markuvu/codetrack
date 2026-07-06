@@ -3,6 +3,7 @@ import * as cheerio from "cheerio"
 
 const PROFILE_BASE = "https://www.codechef.com/users/"
 const RECENT_URL = "https://www.codechef.com/recent/user"
+const SITE_BASE = "https://www.codechef.com"
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; CodeTrack/0.1)" }
 
 // CodeChef displays times in IST for anonymous requests.
@@ -147,8 +148,8 @@ function parseRecentTime(raw) {
  * Accepted solves since sinceMs from the recent-activity AJAX endpoint
  * (https://www.codechef.com/recent/user?page=N&user_handle=H, which returns
  * { content: "<table html>", max_page }). Deduplicated per problem, earliest
- * AC kept. [{ id, at }] with `at` in epoch ms - same contract as the other
- * platforms' activity fetchers.
+ * AC kept. [{ id, name, url, at }] with `at` in epoch ms - same contract as
+ * the other platforms' activity fetchers.
  */
 export async function getCodeChefRecentActivity(handle, sinceMs) {
   const earliest = new Map()
@@ -193,8 +194,17 @@ export async function getCodeChefRecentActivity(handle, sinceMs) {
       }
       if (!result.includes("accepted")) continue
 
+      const name = problemLink.text().trim() || (hrefMatch ? hrefMatch[2] : problem)
+      const problemUrl = href
+        ? href.startsWith("http")
+          ? href
+          : SITE_BASE + href
+        : null
+
       const prev = earliest.get(problem)
-      if (prev === undefined || at < prev) earliest.set(problem, at)
+      if (prev === undefined || at < prev.at) {
+        earliest.set(problem, { at, name, url: problemUrl })
+      }
     }
 
     // Stop paging once rows stop parsing (layout change), we've reached
@@ -204,5 +214,10 @@ export async function getCodeChefRecentActivity(handle, sinceMs) {
     if (Number.isFinite(maxPage) && page + 1 >= maxPage) break
   }
 
-  return [...earliest.entries()].map(([id, at]) => ({ id, at }))
+  return [...earliest.entries()].map(([id, solve]) => ({
+    id,
+    name: solve.name,
+    url: solve.url,
+    at: solve.at,
+  }))
 }

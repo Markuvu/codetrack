@@ -1,6 +1,7 @@
 import axios from "axios"
 
 const HISTORY_BASE = "https://atcoder.jp/users/"
+const CONTEST_URL_BASE = "https://atcoder.jp/contests/"
 const AC_RANK_URL = "https://kenkoooo.com/atcoder/atcoder-api/v3/user/ac_rank"
 const SUBMISSIONS_URL = "https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions"
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; CodeTrack/0.1)" }
@@ -51,7 +52,9 @@ export async function getAtCoderProfile(handle) {
 
 /**
  * Accepted solves since sinceMs via kenkoooo's submissions API, deduplicated
- * per problem (earliest AC kept). [{ id, at }] with `at` in epoch ms.
+ * per problem (earliest AC kept). [{ id, name, url, at }] with `at` in epoch
+ * ms. kenkoooo has no problem titles in this endpoint, so `name` is the
+ * problem id (e.g. "abc410_c") and `url` points at the contest task page.
  */
 export async function getAtCoderRecentActivity(handle, sinceMs) {
   const { data } = await axios.get(SUBMISSIONS_URL, {
@@ -67,9 +70,16 @@ export async function getAtCoderRecentActivity(handle, sinceMs) {
     if (sub.result !== "AC") continue
     const at = sub.epoch_second * 1000
     const prev = earliest.get(sub.problem_id)
-    if (prev === undefined || at < prev) earliest.set(sub.problem_id, at)
+    if (prev === undefined || at < prev.at) {
+      earliest.set(sub.problem_id, { at, contestId: sub.contest_id ?? null })
+    }
   }
-  return [...earliest.entries()].map(([id, at]) => ({ id, at }))
+  return [...earliest.entries()].map(([id, solve]) => ({
+    id,
+    name: id,
+    url: solve.contestId ? CONTEST_URL_BASE + solve.contestId + "/tasks/" + id : null,
+    at: solve.at,
+  }))
 }
 
 /**
