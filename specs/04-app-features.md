@@ -15,10 +15,11 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 - Greeting ("Hey, <name>") - prefers the account name, falls back to first handle
 - **Overview card**: Problems Solved / Contests Participated / Platforms Linked icon tiles
-- **Horizontal platform cards** (175px wide): real platform logo, headline metric (Rating, or Coding Score for GFG), two sub-stats per platform, rating **sparkline** (last 25 points of `ratingHistory` - CF, LC via `userContestRankingHistory`, CC via `all_rating`, AtCoder), badge pill (CF rank, LC top-%, CC stars, AtCoder max, GFG streak), "+ Add handle" empty state
+- **Horizontal platform cards** (175px wide): real platform logo, headline metric (Rating, or Coding Score for GFG), sub-stats per platform (**LeetCode shows Peak / Rank / Solved** - peak is derived as the highest point of the contest-rating history since LeetCode exposes no `maxRating`, and long global ranks are compacted like `#40.7K`; other platforms show two sub-stats), rating **sparkline** (last 25 points of `ratingHistory` - CF, LC via `userContestRankingHistory`, CC via `all_rating`, AtCoder), badge pill (CF rank, LC top-%, CC stars, AtCoder max, GFG streak), "+ Add handle" empty state
 - **Card ordering**: rated platforms first, then GFG with a coding score (it has no contest rating), then connected-but-unrated (incl. loading/errored), then unconnected last; ties keep the canonical order (CF, LC, CC, AtCoder, GFG)
 - **Weekly Progress card**: Mon-Sun bar chart of problems solved per day + **goal ring** with `solved / goal`, percent, and a pace message. Codeforces / LeetCode / CodeChef / AtCoder counts come from **real per-submission history** (`/api/activity`), bucketed in the device's local timezone, so the whole week is covered even if a handle was linked mid-week; GFG has no public history and falls back to daily snapshot deltas. Goal is editable (pencil icon), stored locally (`weekly_goal`, default 50)
 - **Activity heatmap card** (`activity_heatmap.dart`): LeetCode-style contribution calendar merging **every platform's submissions into one grid** (`/api/heatmap`, past 365 days). Header shows bold stats - total submissions in the past year, **total active days**, **max streak** (longest run of consecutive active days); months render as separate blocks with the label **below** each block and gaps in between; 4-level intensity ramp in the theme's primary color; horizontally scrollable, auto-scrolled to the current month; **tap a cell** for the per-platform breakdown (`Sat, Mar 14, 2026 - 7 submissions - CF 3 - LC 3 - CC 1`). Hidden until at least one platform has data; GFG is excluded (no public per-day history). Day cells use UTC dates (see `05` #14-15)
+- **Recent Solves feed**: merged list of the latest accepted solves across all linked platforms (activity window, last ~8 days), newest first, up to 8 rows - platform logo, problem name, and relative time (`LeetCode - 2h ago`); built from the same enriched `/api/activity` data (`{ id, name, url, at }`) as Weekly Progress. AtCoder rows show problem **ids** (kenkoooo exposes no titles); GFG is absent (no public history). Hidden when there are no solves in the window
 - **Upcoming Contests preview**: next 3 contests with month/day date boxes and countdown; **View all** button and tapping any row jumps to the Contests tab
 - Pull-to-refresh forces fresh fetches (`fresh=1`) so a solve from moments ago shows up immediately
 - Tap a card to add/edit that platform's handle
@@ -34,6 +35,7 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
   - Confirmation snackbar states the exact local notification time
   - **Manage reminders** sheet (edit-bell icon): list of scheduled reminders with notify times + cancel buttons; expired ones auto-pruned
   - Persisted in prefs (`scheduled_reminders`); notification ids derived from contest id + lead time
+  - **Hardened scheduling**: reminders use **exact alarms** (`exactAllowWhileIdle`) and silently fall back to inexact scheduling if the exact-alarm permission is denied; on Android 12+ the app requests the "Alarms & reminders" permission during init (opens system settings). Boot-persistence receivers + `SCHEDULE_EXACT_ALARM` / `RECEIVE_BOOT_COMPLETED` manifest steps are documented in `app/README.md` (the `android/` folder is machine-local, not committed)
 
 ## Progress (tab 3)
 
@@ -70,5 +72,5 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 ## Platform support
 
-- **Android**: full feature set (requires NDK 27 + desugaring, see `05` #6)
+- **Android**: full feature set (requires NDK 27 + desugaring, see `05` #6; exact-alarm + boot-receiver manifest steps in `app/README.md`)
 - **Web**: works for development; reminders/notifications disabled behind `kIsWeb` guards; logos work via the backend proxy (see `05` #10)

@@ -15,9 +15,9 @@ Cached 6h; every fresh fetch also records a daily snapshot. Pass `fresh=1` (used
 Batch fetch. Returns `{ profiles: [{ platform, handle, data? , error? }] }` - per-entry errors, never all-or-nothing. `fresh=1` applies to every entry.
 
 ### `GET /api/activity/:platform/:handle?days=8[&fresh=1]`
-Per-solve history for the weekly-progress chart: `{ supported, solves: [{ id, at }] }` with `at` in epoch **ms**, accepted solves only, deduplicated per problem (earliest AC kept). Covers the full window even for handles linked mid-week; the app buckets days in the device's local timezone.
+Per-solve history powering the weekly-progress chart **and the Recent Solves feed**: `{ supported, solves: [{ id, name, url, at }] }` with `at` in epoch **ms**, `name` the problem title, and `url` a direct link to the problem. Accepted solves only, deduplicated per problem (earliest AC kept). Covers the full window even for handles linked mid-week; the app buckets days in the device's local timezone.
 
-- Supported: **codeforces** (`user.status`), **leetcode** (GraphQL `recentAcSubmissionList`, latest ~100 ACs), **codechef** (recent-activity table scrape - fragile, errors degrade to snapshots), **atcoder** (kenkoooo submissions API)
+- Supported: **codeforces** (`user.status`; name/url from the submission's problem), **leetcode** (GraphQL `recentAcSubmissionList` incl. `title`, latest ~100 ACs), **codechef** (recent-activity table scrape - fragile, errors degrade to snapshots; name/url from the problem link), **atcoder** (kenkoooo submissions API - `name` is the problem **id**, kenkoooo doesn't expose titles; url points at the contest task)
 - **gfg**: no public history -> `{ supported: false, solves: [] }`; the app falls back to daily snapshot deltas
 - `days` 1-31 (default 7). Cached 10 min; `fresh=1` bypasses with a 60s cooldown
 
