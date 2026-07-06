@@ -14,12 +14,14 @@ import {
   getCodeforcesProfile,
   getCodeforcesRecentActivity,
   getCodeforcesRecentSolved,
+  getCodeforcesTopics,
 } from "./services/codeforces.js"
 import { getGfgProfile } from "./services/gfg.js"
 import {
   getLeetCodeHeatmap,
   getLeetCodeProfile,
   getLeetCodeRecentActivity,
+  getLeetCodeTopics,
 } from "./services/leetcode.js"
 import { getSnapshots, recordSnapshot } from "./services/snapshots.js"
 
@@ -31,6 +33,8 @@ const ACTIVITY_TTL_SECONDS = 10 * 60 // per-solve history powers "just solved" u
 const ACTIVITY_FRESH_COOLDOWN_SECONDS = 60
 const HEATMAP_TTL_SECONDS = 6 * 60 * 60 // a year of history changes slowly
 const HEATMAP_FRESH_COOLDOWN_SECONDS = 5 * 60
+const TOPICS_TTL_SECONDS = 6 * 60 * 60 // tag distributions shift slowly
+const TOPICS_FRESH_COOLDOWN_SECONDS = 5 * 60
 
 const PLATFORMS = {
   codeforces: getCodeforcesProfile,
@@ -93,6 +97,15 @@ const HEATMAP_PLATFORMS = {
     return days
   },
   atcoder: getAtCoderHeatmap,
+}
+
+// Topic-wise breakdown of solved problems (like leetcode.com/progress).
+// LeetCode ships tag counts + the Easy/Medium/Hard split via GraphQL;
+// Codeforces tags are aggregated from the submission history. CodeChef,
+// AtCoder and GFG expose no public per-problem tags -> { supported: false }.
+const TOPIC_PLATFORMS = {
+  leetcode: getLeetCodeTopics,
+  codeforces: getCodeforcesTopics,
 }
 
 function wantsFresh(req) {
@@ -187,6 +200,33 @@ app.get("/api/heatmap/:platform/:handle", async (req, res) => {
       wantsFresh(req) ? { maxAgeSeconds: HEATMAP_FRESH_COOLDOWN_SECONDS } : undefined,
     )
     res.json({ supported: true, days })
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
+// Topic categorization of solved problems:
+// GET /api/topics/:platform/:handle[?fresh=1]
+// -> { supported, topics: [{ tag, solved }], difficulty? } where difficulty
+// is LeetCode's Easy/Medium/Hard split. Codeforces counts each solved
+// problem once per tag, so topic totals intentionally overlap.
+app.get("/api/topics/:platform/:handle", async (req, res) => {
+  const { platform, handle } = req.params
+  if (!PLATFORMS[platform]) {
+    return res.status(400).json({ error: `Unsupported platform '${platform}'` })
+  }
+  const fetchTopics = TOPIC_PLATFORMS[platform]
+  if (!fetchTopics) {
+    return res.json({ supported: false, topics: [] })
+  }
+  try {
+    const result = await cache.wrap(
+      `topics:${platform}:${handle}`,
+      TOPICS_TTL_SECONDS,
+      () => fetchTopics(handle),
+      wantsFresh(req) ? { maxAgeSeconds: TOPICS_FRESH_COOLDOWN_SECONDS } : undefined,
+    )
+    res.json({ supported: true, ...result })
   } catch (err) {
     res.status(502).json({ error: err.message })
   }
