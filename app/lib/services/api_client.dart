@@ -23,6 +23,27 @@ class Solve {
   final DateTime at;
 }
 
+/// One topic tag with its solved count, from `/api/topics`.
+class TopicCount {
+  TopicCount({required this.tag, required this.solved});
+
+  final String tag;
+  final int solved;
+}
+
+/// Topic categorization of solved problems (like leetcode.com/progress).
+class TopicStats {
+  TopicStats({required this.topics, this.difficulty});
+
+  /// Tags sorted by solved count (descending) by the backend. Codeforces
+  /// counts a problem once per tag, so topic totals intentionally overlap.
+  final List<TopicCount> topics;
+
+  /// Easy/Medium/Hard solved split - LeetCode only (keys: easy, medium,
+  /// hard, all). Null for platforms without difficulty tiers.
+  final Map<String, int>? difficulty;
+}
+
 class ApiClient {
   static const _urlKey = 'backend_url';
 
@@ -94,6 +115,28 @@ class ApiClient {
     if (data['supported'] != true) return null;
     return ((data['days'] as Map?) ?? {})
         .map((k, v) => MapEntry('$k', ((v as num?) ?? 0).toInt()));
+  }
+
+  /// Topic-wise categorization of solved problems for the Progress tab
+  /// (LeetCode: skill tags + difficulty split; Codeforces: problem tags).
+  /// Returns null when the platform exposes no public tag data (CodeChef,
+  /// AtCoder, GFG).
+  Future<TopicStats?> fetchTopics(String platform, String handle,
+      {bool fresh = false}) async {
+    final suffix = fresh ? '?fresh=1' : '';
+    final data = await _getJson('/api/topics/$platform/$handle$suffix',
+        timeout: const Duration(seconds: 60));
+    if (data['supported'] != true) return null;
+    final difficulty = (data['difficulty'] as Map?)
+        ?.map((k, v) => MapEntry('$k', ((v as num?) ?? 0).toInt()));
+    final topics = ((data['topics'] as List?) ?? []).map((t) {
+      final m = t as Map;
+      return TopicCount(
+        tag: '${m['tag']}',
+        solved: ((m['solved'] as num?) ?? 0).toInt(),
+      );
+    }).toList();
+    return TopicStats(topics: topics, difficulty: difficulty);
   }
 
   Future<List<Contest>> fetchContests() async {
