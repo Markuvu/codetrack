@@ -5,7 +5,8 @@
     android:layout_height="match_parent"
     android:background="@drawable/codetrack_widget_bg"
     android:orientation="vertical"
-    android:padding="14dp">
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp">
 
     <!-- Auto-cycling slide transition between the three panes. -->
     <ViewFlipper
@@ -22,25 +23,48 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:gravity="center_vertical"
-            android:orientation="vertical">
+            android:orientation="horizontal">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="\uD83D\uDD25 CURRENT STREAK"
-                android:textColor="#B39DFF"
-                android:textSize="11sp"
-                android:textStyle="bold" />
+                android:text="\uD83D\uDD25"
+                android:textSize="30sp" />
 
-            <TextView
-                android:id="@+id/streak_value"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="0 days"
-                android:textColor="#FFFFFF"
-                android:textSize="20sp"
-                android:textStyle="bold" />
+                android:layout_marginStart="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.1"
+                    android:text="CURRENT STREAK"
+                    android:textColor="#B39DFF"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/streak_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 days"
+                    android:textColor="#FFFFFF"
+                    android:textSize="21sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/streak_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Solve a problem to start one"
+                    android:textColor="#9E97B8"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Pane 2: weekly progress -->
@@ -48,63 +72,100 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:gravity="center_vertical"
-            android:orientation="vertical">
+            android:orientation="horizontal">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="\uD83D\uDCC8 WEEKLY PROGRESS"
-                android:textColor="#B39DFF"
-                android:textSize="11sp"
-                android:textStyle="bold" />
+                android:text="\uD83D\uDCC8"
+                android:textSize="30sp" />
 
-            <TextView
-                android:id="@+id/progress_value"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="0 / 50 solved"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <ProgressBar
-                android:id="@+id/progress_bar"
-                style="?android:attr/progressBarStyleHorizontal"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="6dp"
-                android:layout_marginTop="6dp"
-                android:max="100"
-                android:progress="0"
-                android:progressTint="#6C5CE7" />
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.1"
+                    android:text="WEEKLY PROGRESS"
+                    android:textColor="#B39DFF"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/progress_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 / 50 \u00B7 0%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="19sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/progress_bar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="6dp"
+                    android:layout_marginTop="5dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressBackgroundTint="#332F45"
+                    android:progressTint="#8B7CFF" />
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- Pane 3: next reminder -->
+        <!-- Pane 3: next reminder (platform name + notify time) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:gravity="center_vertical"
-            android:orientation="vertical">
+            android:orientation="horizontal">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="\u23F0 NEXT REMINDER"
-                android:textColor="#B39DFF"
-                android:textSize="11sp"
-                android:textStyle="bold" />
+                android:text="\u23F0"
+                android:textSize="30sp" />
 
-            <TextView
-                android:id="@+id/reminder_value"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:text="No reminders set"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginStart="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.1"
+                    android:text="NEXT REMINDER"
+                    android:textColor="#B39DFF"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/reminder_value"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="No reminders"
+                    android:textColor="#FFFFFF"
+                    android:textSize="19sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/reminder_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Tap a contest bell to set one"
+                    android:textColor="#9E97B8"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
     </ViewFlipper>
 </LinearLayout>

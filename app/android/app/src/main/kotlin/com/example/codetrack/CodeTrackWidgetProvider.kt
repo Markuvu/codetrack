@@ -28,13 +28,19 @@ class CodeTrackWidgetProvider : AppWidgetProvider() {
         val prefs = HomeWidgetPlugin.getData(context)
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.codetrack_widget).apply {
+                // Pane 1: streak
                 setTextViewText(
                     R.id.streak_value,
                     prefs.getString("streak_text", "0 days")
                 )
                 setTextViewText(
+                    R.id.streak_sub,
+                    prefs.getString("streak_sub", "Solve a problem to start one")
+                )
+                // Pane 2: weekly progress
+                setTextViewText(
                     R.id.progress_value,
-                    prefs.getString("progress_text", "0 / 50 solved")
+                    prefs.getString("progress_text", "0 / 50 \u00B7 0%")
                 )
                 setProgressBar(
                     R.id.progress_bar,
@@ -42,9 +48,14 @@ class CodeTrackWidgetProvider : AppWidgetProvider() {
                     prefs.getInt("progress_pct", 0),
                     false
                 )
+                // Pane 3: next reminder (platform + notify time)
                 setTextViewText(
                     R.id.reminder_value,
-                    prefs.getString("reminder_text", "No reminders set")
+                    prefs.getString("reminder_platform", "No reminders")
+                )
+                setTextViewText(
+                    R.id.reminder_sub,
+                    prefs.getString("reminder_time", "Tap a contest bell to set one")
                 )
             }
 

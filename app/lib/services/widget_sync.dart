@@ -10,9 +10,11 @@ import 'package:intl/intl.dart';
 class WidgetSync {
   static const _androidProvider = 'CodeTrackWidgetProvider';
 
-  /// Called by the Dashboard after every refresh.
+  /// Called by the Dashboard after every refresh. [activeToday] drives the
+  /// streak pane's subline (celebrate vs. nudge).
   static Future<void> pushStats({
     required int streak,
+    required bool activeToday,
     required int solvedThisWeek,
     required int weeklyGoal,
   }) async {
@@ -26,8 +28,16 @@ class WidgetSync {
         streak == 1 ? '1 day' : '$streak days',
       );
       await HomeWidget.saveWidgetData<String>(
+        'streak_sub',
+        streak == 0
+            ? 'Solve a problem to start one'
+            : activeToday
+                ? 'On fire - keep it up!'
+                : 'Solve one today to keep it alive',
+      );
+      await HomeWidget.saveWidgetData<String>(
         'progress_text',
-        '$solvedThisWeek / $weeklyGoal solved',
+        '$solvedThisWeek / $weeklyGoal \u00B7 $pct%',
       );
       await HomeWidget.saveWidgetData<int>('progress_pct', pct);
       await _update();
@@ -39,6 +49,8 @@ class WidgetSync {
   /// Called whenever reminders change (set / cancel / prune) and after
   /// dashboard refreshes. [reminders] entries follow AppStore.loadReminders():
   /// `{ notifId, contestName, platform, startMs, notifyAtMs }`.
+  /// The widget shows the platform name (short and readable) rather than the
+  /// often-long contest name.
   static Future<void> pushNextReminder(
       List<Map<String, dynamic>> reminders) async {
     if (kIsWeb) return;
@@ -49,17 +61,20 @@ class WidgetSync {
           .toList()
         ..sort((a, b) =>
             (a['notifyAtMs'] as num).compareTo(b['notifyAtMs'] as num));
-      String text;
+      String platform;
+      String time;
       if (upcoming.isEmpty) {
-        text = 'No reminders set';
+        platform = 'No reminders';
+        time = 'Tap a contest bell to set one';
       } else {
         final next = upcoming.first;
+        platform = '${next['platform'] ?? 'Contest'}';
         final at = DateTime.fromMillisecondsSinceEpoch(
             (next['notifyAtMs'] as num).toInt());
-        text =
-            '${next['contestName']} \u00B7 ${DateFormat('EEE h:mm a').format(at)}';
+        time = 'Notifies ${DateFormat('EEE, h:mm a').format(at)}';
       }
-      await HomeWidget.saveWidgetData<String>('reminder_text', text);
+      await HomeWidget.saveWidgetData<String>('reminder_platform', platform);
+      await HomeWidget.saveWidgetData<String>('reminder_time', time);
       await _update();
     } catch (_) {
       // Native side missing or plugin unavailable - ignore.
