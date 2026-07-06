@@ -125,8 +125,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final total = values.fold<int>(0, (sum, v) => sum + v);
     final now = DateTime.now().toUtc();
     final todayKey = _dateKey(DateTime.utc(now.year, now.month, now.day));
-    final activeToday =
-        _heatmaps.values.any((days) => (days[todayKey] ?? 0) > 0);
+    final activeToday = _activeDays().contains(todayKey);
     await WidgetSync.pushStats(
       streak: _currentStreak(),
       activeToday: activeToday,
@@ -136,17 +135,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await WidgetSync.pushNextReminder(await _store.loadReminders());
   }
 
-  /// Current streak: consecutive active days (submissions on any platform)
-  /// ending today - or ending yesterday when today has no submissions yet,
-  /// so the streak isn't shown as broken mid-day. UTC day buckets, matching
-  /// the heatmap convention.
-  int _currentStreak() {
+  /// Union of days ('yyyy-MM-dd', UTC) with at least one submission on any
+  /// platform - shared by the streak card, streak math, and widget sync.
+  Set<String> _activeDays() {
     final active = <String>{};
     for (final map in _heatmaps.values) {
       map.forEach((day, count) {
         if (count > 0) active.add(day);
       });
     }
+    return active;
+  }
+
+  /// Current streak: consecutive active days (submissions on any platform)
+  /// ending today - or ending yesterday when today has no submissions yet,
+  /// so the streak isn't shown as broken mid-day. UTC day buckets, matching
+  /// the heatmap convention.
+  int _currentStreak() {
+    final active = _activeDays();
     if (active.isEmpty) return 0;
     final now = DateTime.now().toUtc();
     var day = DateTime.utc(now.year, now.month, now.day);
@@ -455,6 +461,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
           _overviewCard(),
           const SizedBox(height: 20),
+          _streakSection(),
           Text(
             'Platforms',
             style: Theme.of(context)
@@ -508,6 +515,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Text(
           'All your coding progress at one place.',
           style: theme.textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  /// Streak card: flame + current streak with the same motivational subline
+  /// as the home-screen widget, plus the last 7 days as check tiles.
+  /// Hidden until at least one platform has heatmap data.
+  Widget _streakSection() {
+    if (_heatmaps.values.every((days) => days.isEmpty)) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.primary;
+    final active = _activeDays();
+    final streak = _currentStreak();
+    final now = DateTime.now().toUtc();
+    final today = DateTime.utc(now.year, now.month, now.day);
+    final activeToday = active.contains(_dateKey(today));
+    final message = streak == 0
+        ? 'Solve a problem to start a streak'
+        : activeToday
+            ? 'On fire - keep it up!'
+            : 'Solve one today to keep it alive';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const Text('\u{1F525}', style: TextStyle(fontSize: 30)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            streak == 1
+                                ? '1 day streak'
+                                : '$streak day streak',
+                            style: theme.textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          Text(message, style: theme.textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    for (var i = 6; i >= 0; i--)
+                      Expanded(
+                        child: _dayTile(
+                          today.subtract(Duration(days: i)),
+                          active,
+                          color,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  /// One circle in the streak card's 7-day row: filled with a check when the
+  /// day had submissions, outlined when it's today-but-empty, dim otherwise.
+  Widget _dayTile(DateTime day, Set<String> active, Color color) {
+    const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final theme = Theme.of(context);
+    final isActive = active.contains(_dateKey(day));
+    final now = DateTime.now().toUtc();
+    final isToday =
+        _dateKey(day) == _dateKey(DateTime.utc(now.year, now.month, now.day));
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isActive ? color : color.withOpacity(0.08),
+            border: isToday && !isActive
+                ? Border.all(color: color, width: 1.5)
+                : null,
+          ),
+          child: isActive
+              ? const Icon(Icons.check, size: 16, color: Colors.white)
+              : null,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          letters[day.weekday - 1],
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+            color: isToday ? color : theme.textTheme.bodySmall?.color,
+          ),
         ),
       ],
     );
