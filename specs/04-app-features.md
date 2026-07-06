@@ -1,6 +1,6 @@
 # 04 - App Features Implemented
 
-State of the Flutter app as of v0.3.x (July 2026).
+State of the Flutter app as of v0.4.x (July 2026).
 
 ## Auth (local-only)
 
@@ -25,6 +25,14 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 - Tap a card to add/edit that platform's handle
 - Tabs live in an `IndexedStack`, so dashboard state (and card order) survives tab switches - no refetch/reshuffle when returning
 
+## Home-screen widget (Android)
+
+- **Animated launcher widget** (`home_widget` package + native `CodeTrackWidgetProvider`): a `ViewFlipper` auto-cycles every 4s with slide transitions between three panes - **current streak** (consecutive active days from the merged heatmap, UTC days; counts up to yesterday if today has no solves yet), **weekly progress** (`solved / goal` + tinted progress bar), and the **next contest reminder** (contest name + notify time)
+- Tapping the widget opens the app; dark rounded background matching the app theme
+- Data flow: `lib/services/widget_sync.dart` saves `streak_text` / `progress_text` / `progress_pct` / `reminder_text` via `HomeWidget.saveWidgetData` and triggers a widget update. Synced after every Dashboard refresh, on weekly-goal edits, and whenever reminders are set / cancelled / pruned; also refreshed by the system every 30 min (`updatePeriodMillis`)
+- Sync is fire-and-forget: no-ops on web and swallows errors, so the app never breaks if the native side isn't installed
+- Native files (Kotlin provider, layout, widget info, background drawable) are **committed under `app/android/...`** even though the rest of `android/` is machine-local; manifest receiver registration + package-name check are manual steps documented in `app/README.md`
+
 ## Contests (tab 2)
 
 - Aggregated upcoming contests (CLIST) with a **segmented platform filter bar**: one fixed row of equal-width tiles ("All" + one per platform), each showing the logo and its contest count; the selected tile is tinted/outlined in the platform color, tapping the active tile clears the filter, and a caption under the bar names the active filter with the visible count. Never wraps or scrolls, regardless of platform count
@@ -36,6 +44,7 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
   - **Manage reminders** sheet (edit-bell icon): list of scheduled reminders with notify times + cancel buttons; expired ones auto-pruned
   - Persisted in prefs (`scheduled_reminders`); notification ids derived from contest id + lead time
   - **Hardened scheduling**: reminders use **exact alarms** (`exactAllowWhileIdle`) and silently fall back to inexact scheduling if the exact-alarm permission is denied; on Android 12+ the app requests the "Alarms & reminders" permission during init (opens system settings). Boot-persistence receivers + `SCHEDULE_EXACT_ALARM` / `RECEIVE_BOOT_COMPLETED` manifest steps are documented in `app/README.md` (the `android/` folder is machine-local, not committed)
+  - Every reminder change also updates the home-screen widget's "next reminder" pane
 
 ## Progress (tab 3)
 
@@ -72,5 +81,5 @@ Redesigned to match a purple-dark mockup (commit `21ef1d4a`):
 
 ## Platform support
 
-- **Android**: full feature set (requires NDK 27 + desugaring, see `05` #6; exact-alarm + boot-receiver manifest steps in `app/README.md`)
-- **Web**: works for development; reminders/notifications disabled behind `kIsWeb` guards; logos work via the backend proxy (see `05` #10)
+- **Android**: full feature set (requires NDK 27 + desugaring, see `05` #6; exact-alarm + boot-receiver + widget manifest steps in `app/README.md`)
+- **Web**: works for development; reminders/notifications and the home-screen widget are disabled behind `kIsWeb` guards; logos work via the backend proxy (see `05` #10)

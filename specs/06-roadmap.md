@@ -6,19 +6,19 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 - [ ] **Deploy the backend** (Render / Railway / Fly.io) so the app works without a PC running locally; move the app's default backend URL to the hosted instance
 - [ ] **Server accounts + cloud sync** - upgrade the local auth (`auth_service.dart`) to real accounts once the backend is hosted over HTTPS; sync handles/friends/flashcards across devices
-- [ ] **Open links** - `url_launcher` so contest cards and flashcards open the contest/problem page
+- [ ] **Open links** - `url_launcher` so contest cards, flashcards and Recent Solves rows open the contest/problem page (`/api/activity` now returns per-solve `url`s)
 
 ## Dashboard
 
-- [ ] Day-streak, submissions and AC-rate tiles (can now reuse `/api/activity` for CF/LC/CC/AtCoder, plus CodeChef's `heatmap`)
-- [ ] Recent Activity feed (latest accepted submissions across platforms - `/api/activity` already has the data)
+- [ ] Day-streak, submissions and AC-rate tiles in the app UI (streak is already computed for the home-screen widget - reuse `_currentStreak()`)
+- [x] Recent Activity feed - **Recent Solves** card on the Dashboard; `/api/activity` enriched to return `{ id, name, url, at }` per solve on all four supported platforms
 - [x] Weekly goal ring + weekly solved chart - CF/LC/CodeChef/AtCoder use real per-submission history via `/api/activity` (local-timezone day buckets, full week even for handles linked mid-week); GFG falls back to daily snapshot deltas
 - [ ] Show CodeChef extras somewhere (league, global/country rank, institution - now scraped and available in `raw`)
 
 ## Contests & reminders
 
-- [ ] Exact alarms (`SCHEDULE_EXACT_ALARM`) and reschedule-on-boot receiver
-- [ ] Home-screen widget for the next contest
+- [x] Exact alarms (`SCHEDULE_EXACT_ALARM`) with automatic inexact fallback + reschedule-on-boot receivers (manifest steps in `app/README.md`)
+- [x] Home-screen widget - animated ViewFlipper widget cycling streak / weekly progress / next reminder (`home_widget` + `CodeTrackWidgetProvider`; setup in `app/README.md`)
 - [ ] Push notifications via FCM once the backend is hosted (server-driven reminders)
 
 ## Flashcards
@@ -31,7 +31,7 @@ Things discussed but intentionally not built yet, in rough priority order.
 
 - [ ] Optionally bundle official platform logo assets (licensing check first) for offline crispness
 - [ ] Make the repo public once secrets/config are audited
-- [ ] iOS build (needs a Mac for signing)
+- [ ] iOS build (needs a Mac for signing; the home-screen widget is Android-only for now - iOS needs a WidgetKit extension)
 
 ## Known limitations
 
@@ -40,3 +40,4 @@ Things discussed but intentionally not built yet, in rough priority order.
 - Weekly Progress: GFG has no public submission history, so its bars come from daily snapshot deltas (need a prior-day baseline, UTC dates); LeetCode history is capped at the latest ~100 accepted submissions; CodeChef activity is scraped (fragile - breaks silently back to snapshots if the layout changes)
 - CodeChef scraping (profile + activity) depends on page layout and embedded script variables (`all_rating`, `userDailySubmissionsStats`); selectors fail loudly on redesign
 - Snapshots live on the backend's disk - lost if the backend host is wiped (until a real DB)
+- Home-screen widget data refreshes when the app syncs it (dashboard refresh / reminder changes) plus a 30-min system cycle - it can lag behind live platform activity until the app is opened
