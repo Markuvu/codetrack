@@ -6,6 +6,7 @@ import '../models/contest.dart';
 import '../models/profile.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/widget_sync.dart';
 import '../storage/app_store.dart';
 import '../widgets/activity_heatmap.dart';
 import '../widgets/platform_logo.dart';
@@ -114,6 +115,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }));
     if (mounted) setState(() => _loading = false);
+    _syncHomeWidget();
+  }
+
+  /// Mirrors the freshest streak / weekly progress / next reminder to the
+  /// Android home-screen widget. Fire-and-forget; never blocks the UI.
+  Future<void> _syncHomeWidget() async {
+    final values = _weekValues();
+    final total = values.fold<int>(0, (sum, v) => sum + v);
+    await WidgetSync.pushStats(
+      streak: _currentStreak(),
+      solvedThisWeek: total,
+      weeklyGoal: _weeklyGoal,
+    );
+    await WidgetSync.pushNextReminder(await _store.loadReminders());
+  }
+
+  /// Current streak: consecutive active days (submissions on any platform)
+  /// ending today - or ending yesterday when today has no submissions yet,
+  /// so the streak isn't shown as broken mid-day. UTC day buckets, matching
+  /// the heatmap convention.
+  int _currentStreak() {
+    final active = <String>{};
+    for (final map in _heatmaps.values) {
+      map.forEach((day, count) {
+        if (count > 0) active.add(day);
+      });
+    }
+    if (active.isEmpty) return 0;
+    final now = DateTime.now().toUtc();
+    var day = DateTime.utc(now.year, now.month, now.day);
+    if (!active.contains(_dateKey(day))) {
+      day = day.subtract(const Duration(days: 1));
+    }
+    var streak = 0;
+    while (active.contains(_dateKey(day))) {
+      streak++;
+      day = day.subtract(const Duration(days: 1));
+    }
+    return streak;
   }
 
   Future<void> _editHandle(String platform) async {
@@ -185,6 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (result == null || result < 1) return;
     setState(() => _weeklyGoal = result);
     await _store.saveWeeklyGoal(result);
+    _syncHomeWidget();
   }
 
   // --- platform helpers --------------------------------------------------
