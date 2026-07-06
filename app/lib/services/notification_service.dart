@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -20,10 +21,17 @@ class NotificationService {
       iOS: DarwinInitializationSettings(),
     );
     await _plugin.initialize(settings);
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestNotificationsPermission();
+    // Android 12+: exact alarms need a user grant (Settings -> Alarms &
+    // reminders). Best-effort - scheduling falls back to inexact when denied.
+    try {
+      await android?.requestExactAlarmsPermission();
+    } catch (_) {
+      // Older plugin/OS combinations may not support the request; inexact
+      // scheduling still works.
+    }
   }
 
   /// Stable notification id for a contest + lead-time combination, so the
@@ -37,8 +45,25 @@ class NotificationService {
     return '${d.inMinutes} minutes';
   }
 
+  static const _details = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'contests',
+      'Contest reminders',
+      channelDescription: 'Reminders before programming contests start',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(),
+  );
+
   /// Schedules a reminder. Returns the notification id, or null when
   /// unsupported (web) or the notify time is already in the past.
+  ///
+  /// Tries an **exact** alarm first (fires at the precise minute even in
+  /// Doze); falls back to inexact when the exact-alarm permission is denied.
+  /// With `RECEIVE_BOOT_COMPLETED` declared in the Android manifest (see
+  /// app/README.md), the plugin re-registers scheduled notifications after a
+  /// reboot, so reminders survive phone restarts.
   Future<int?> scheduleContestReminder(
     Contest contest, {
     Duration before = const Duration(minutes: 30),
@@ -48,25 +73,35 @@ class NotificationService {
     if (when.isBefore(DateTime.now())) return null;
 
     final id = reminderId(contest, before);
-    await _plugin.zonedSchedule(
-      id,
-      '${contest.name} starts soon!',
-      '${contest.platform} contest begins in ${_leadText(before)}.',
-      tz.TZDateTime.from(when, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'contests',
-          'Contest reminders',
-          channelDescription: 'Reminders before programming contests start',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+    final title = '${contest.name} starts soon!';
+    final body = '${contest.platform} contest begins in ${_leadText(before)}.';
+    final at = tz.TZDateTime.from(when, tz.local);
+
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        at,
+        _details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } on PlatformException {
+      // Exact alarms not permitted on this device - schedule inexactly
+      // (may fire a few minutes late under Doze, but never silently fails).
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        at,
+        _details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
     return id;
   }
 

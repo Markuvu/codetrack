@@ -6,6 +6,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contest.dart';
 import '../models/profile.dart';
 
+/// A single accepted solve from `/api/activity` - powers the weekly-progress
+/// chart and the Recent Solves feed.
+class Solve {
+  Solve({required this.id, this.name, this.url, required this.at});
+
+  final String id;
+
+  /// Problem title when the platform provides one (AtCoder only has ids).
+  final String? name;
+
+  /// Link to the problem page, when available.
+  final String? url;
+
+  /// Accepted time (UTC instant).
+  final DateTime at;
+}
+
 class ApiClient {
   static const _urlKey = 'backend_url';
 
@@ -42,21 +59,27 @@ class ApiClient {
             timeout: const Duration(seconds: 60)));
   }
 
-  /// Timestamps of recently accepted solves, for the weekly-progress chart.
+  /// Recently accepted solves (with problem names/links where available), for
+  /// the weekly-progress chart and the Recent Solves feed.
   /// Returns null when the platform exposes no public submission history
-  /// (CodeChef, GFG) - callers fall back to snapshot deltas.
+  /// (GFG) - callers fall back to snapshot deltas.
   /// Asks for 8 days so local-timezone bucketing never misses the week edges.
-  Future<List<DateTime>?> fetchActivity(String platform, String handle,
+  Future<List<Solve>?> fetchActivity(String platform, String handle,
       {bool fresh = false}) async {
     final suffix = fresh ? '&fresh=1' : '';
     final data = await _getJson('/api/activity/$platform/$handle?days=8$suffix',
         timeout: const Duration(seconds: 60));
     if (data['supported'] != true) return null;
-    return ((data['solves'] as List?) ?? [])
-        .map((s) => DateTime.fromMillisecondsSinceEpoch(
-            ((s as Map)['at'] as num).toInt(),
-            isUtc: true))
-        .toList();
+    return ((data['solves'] as List?) ?? []).map((s) {
+      final m = s as Map;
+      return Solve(
+        id: '${m['id']}',
+        name: m['name'] as String?,
+        url: m['url'] as String?,
+        at: DateTime.fromMillisecondsSinceEpoch((m['at'] as num).toInt(),
+            isUtc: true),
+      );
+    }).toList();
   }
 
   /// Per-day submission counts for the unified activity heatmap:
