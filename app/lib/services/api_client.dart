@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/contest.dart';
 import '../models/profile.dart';
+import 'auth_service.dart';
 
 /// A single accepted solve from `/api/activity` - powers the weekly-progress
 /// chart and the Recent Solves feed.
@@ -68,6 +69,75 @@ class ApiClient {
       throw Exception('Request failed (${res.statusCode})');
     }
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  /// Authenticated request against the signed-in user's `/api/me` routes.
+  /// The access token is refreshed transparently by [AuthService].
+  Future<Map<String, dynamic>> _authedJson(String method, String path,
+      {Map<String, dynamic>? body,
+      Duration timeout = const Duration(seconds: 30)}) async {
+    final base = await baseUrl();
+    final token = await AuthService.instance.accessToken();
+    final request = http.Request(method, Uri.parse('$base$path'))
+      ..headers['Authorization'] = 'Bearer $token';
+    if (body != null) {
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode(body);
+    }
+    final client = http.Client();
+    late http.Response res;
+    try {
+      res = await http.Response.fromStream(
+          await client.send(request).timeout(timeout));
+    } finally {
+      client.close();
+    }
+    final decoded = res.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+          (decoded['error'] as String?) ?? 'Request failed (${res.statusCode})');
+    }
+    return decoded;
+  }
+
+  /// Handles linked to the account on the server.
+  Future<Map<String, String>> fetchServerHandles() async {
+    final data = await _authedJson('GET', '/api/me/handles');
+    return ((data['handles'] as Map?) ?? {})
+        .map((k, v) => MapEntry('$k', '$v'));
+  }
+
+  /// Upserts non-empty handles and removes null values server-side.
+  /// Platforms not present in [changes] are left untouched.
+  Future<void> syncHandles(Map<String, String?> changes) =>
+      _authedJson('PUT', '/api/me/handles', body: {'handles': changes});
+
+  /// Queues a CodeChef solution import for the signed-in user's saved
+  /// handle. Returns the queued job; throws when no handle is linked.
+  Future<Map<String, dynamic>> triggerCodeChefImport() async {
+    final data = await _authedJson('POST', '/api/me/import/codechef');
+    return (data['job'] as Map).cast<String, dynamic>();
+  }
+
+  /// Latest CodeChef import job for this account, or null if none ran yet.
+  Future<Map<String, dynamic>?> fetchCodeChefImportStatus() async {
+    final data = await _authedJson('GET', '/api/me/import/codechef');
+    return (data['job'] as Map?)?.cast<String, dynamic>();
+  }
+
+  /// Imported CodeChef submissions (metadata; use [fetchMySubmission] for
+  /// the source code). Returns {'total': int, 'submissions': [...]}.
+  Future<Map<String, dynamic>> fetchMySubmissions(
+      {int limit = 50, int offset = 0}) {
+    return _authedJson('GET', '/api/me/submissions?limit=$limit&offset=$offset');
+  }
+
+  /// One imported submission including its source code (when available).
+  Future<Map<String, dynamic>> fetchMySubmission(String id) async {
+    final data = await _authedJson('GET', '/api/me/submissions/$id');
+    return (data['submission'] as Map).cast<String, dynamic>();
   }
 
   /// Set [fresh] when the user explicitly refreshes: the backend bypasses its

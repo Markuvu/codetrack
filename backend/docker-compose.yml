@@ -1,0 +1,23 @@
+# Local development PostgreSQL for the CodeTrack backend.
+#   docker compose up -d db
+#   npm run migrate
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: codetrack
+      POSTGRES_PASSWORD: codetrack
+      POSTGRES_DB: codetrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - codetrack-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codetrack"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  codetrack-pgdata:

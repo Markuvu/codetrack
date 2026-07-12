@@ -57,8 +57,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _handles = await _store.loadHandles();
     _userName = await AuthService.instance.name();
     _weeklyGoal = await _store.loadWeeklyGoal();
+    await _syncHandlesWithServer();
     if (mounted) setState(() {});
     await _refresh();
+  }
+
+  /// Two-way merge of handles with the account on the backend: server
+  /// handles fill in platforms missing locally (fresh install / new device),
+  /// and local-only handles are pushed up. Best-effort - offline or a
+  /// backend without accounts configured just keeps the local copy.
+  Future<void> _syncHandlesWithServer() async {
+    try {
+      final server = await _api.fetchServerHandles();
+      var changedLocally = false;
+      for (final entry in server.entries) {
+        if (!_handles.containsKey(entry.key)) {
+          _handles[entry.key] = entry.value;
+          changedLocally = true;
+        }
+      }
+      if (changedLocally) await _store.saveHandles(_handles);
+      final missingOnServer = {
+        for (final e in _handles.entries)
+          if (server[e.key] != e.value) e.key: e.value,
+      };
+      if (missingOnServer.isNotEmpty) {
+        await _api.syncHandles(missingOnServer);
+      }
+    } catch (_) {
+      // Offline or accounts disabled: local handles remain the source.
+    }
   }
 
   /// [fresh] is set by pull-to-refresh: the backend then bypasses its caches
@@ -204,6 +232,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     });
     await _store.saveHandles(_handles);
+    // Mirror the change to the account server-side (best-effort).
+    try {
+      await _api.syncHandles({platform: handle.isEmpty ? null : handle});
+    } catch (_) {}
     await _refresh();
   }
 

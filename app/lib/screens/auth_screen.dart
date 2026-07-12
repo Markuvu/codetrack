@@ -48,8 +48,8 @@ class _AuthScreenState extends State<AuthScreen> {
       _fail('Enter a valid email address.');
       return;
     }
-    if (password.length < 6) {
-      _fail('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      _fail('Password must be at least 8 characters.');
       return;
     }
 
@@ -64,16 +64,22 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
       setState(() => _busy = true);
-      await AuthService.instance
-          .signUp(name: name, email: email, password: password);
+      try {
+        await AuthService.instance
+            .signUp(name: name, email: email, password: password);
+      } on AuthException catch (err) {
+        if (mounted) setState(() => _busy = false);
+        _fail(err.message);
+        return;
+      }
       _enter();
     } else {
       setState(() => _busy = true);
-      final ok =
-          await AuthService.instance.logIn(email: email, password: password);
-      if (!ok) {
+      try {
+        await AuthService.instance.logIn(email: email, password: password);
+      } on AuthException catch (err) {
         if (mounted) setState(() => _busy = false);
-        _fail('Wrong email or password.');
+        _fail(err.message);
         return;
       }
       _enter();
@@ -181,7 +187,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Your account is stored only on this device.',
+                    'Accounts are stored securely on the CodeTrack backend.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall,
                   ),

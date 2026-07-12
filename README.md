@@ -14,6 +14,8 @@ All your coding profiles, contest reminders, progress tracking & flashcards — 
 
 ```
 Mobile App (Flutter)  ──REST──▶  Backend (Node.js + Express)
+                                    ├── PostgreSQL (accounts, sessions, handles,
+                                    │   CodeChef submissions + source, import jobs)
                                     ├── Codeforces official API (throttled 1 req/2s)
                                     ├── LeetCode GraphQL (unofficial)
                                     ├── CodeChef profile scraper (cheerio)
@@ -33,9 +35,16 @@ All platform data is fetched by **your backend**, never by the app directly — 
 ```bash
 cd backend
 npm install
-cp .env.example .env   # optional: add CLIST credentials for multi-platform contests
-npm start              # http://localhost:3000
+cp .env.example .env   # set JWT_SECRET; optional: CLIST credentials
+docker compose up -d db   # local PostgreSQL 16 (accounts, CodeChef import)
+npm run migrate           # apply database migrations
+npm start                 # http://localhost:3000
 ```
+
+Without `DATABASE_URL` the backend still runs, but accounts, server-side
+handle sync and the CodeChef solution import are disabled (those routes
+return 503). Production setup, security model and all environment variables
+are documented in [backend/PRODUCTION.md](backend/PRODUCTION.md).
 
 Test it:
 
@@ -67,6 +76,11 @@ By default the app talks to `http://10.0.2.2:3000` (Android emulator → your ma
 | `GET /api/snapshots/:platform/:handle` | Daily progress snapshots (auto-recorded on fresh fetches) |
 | `GET /api/solved/codeforces/:handle?limit=20` | Recently solved problems (powers auto-flashcards) |
 | `GET /api/leaderboard?platform=codeforces&handles=a,b,c` | Friend leaderboard sorted by rating |
+| `POST /api/auth/signup` `login` `refresh` `logout` | Accounts: bcrypt passwords, JWT access tokens, rotating refresh tokens |
+| `GET/PATCH /api/me`, `POST /api/me/password` | Current user, profile update, password change |
+| `GET/PUT /api/me/handles` | Server-side copy of your linked platform handles |
+| `POST/GET /api/me/import/codechef` | Trigger / poll the CodeChef solution import for your saved handle |
+| `GET /api/me/submissions[/:id]` | Your imported CodeChef submissions (detail includes source code) |
 | `GET /health` | Health check |
 
 ## Notes & fair use
@@ -84,5 +98,7 @@ By default the app talks to `http://10.0.2.2:3000` (Android emulator → your ma
 - [x] FSRS scheduler for flashcards
 - [x] Auto-generated flashcards from solved problems (Codeforces)
 - [x] Friend leaderboards
+- [x] Server-backed accounts (PostgreSQL, JWT + rotating refresh tokens)
+- [x] CodeChef solution import (metadata + source code via service session)
 - [ ] Home-screen contest countdown widget (requires generated platform folders)
-- [ ] Server-side push notifications (FCM) & cloud sync
+- [ ] Server-side push notifications (FCM) & full cloud sync

@@ -54,12 +54,42 @@ Binary image (PNG/ICO) for the platform's logo, proxied server-side to avoid bro
 ### `GET /api/leaderboard?platform=codeforces&handles=a,b,c`
 `{ platform, leaderboard: [{ handle, rating, solvedCount, error? }] }` sorted by rating desc, then solvedCount desc. Powers the Friends tab.
 
+## Accounts & per-user endpoints (PostgreSQL)
+
+Available when `DATABASE_URL` + `JWT_SECRET` are configured; otherwise these routes return `503`. Auth errors return `401`, authorization/ownership misses `404`, validation `400`. Access tokens are short-lived JWTs (`Authorization: Bearer ...`); refresh tokens rotate on every refresh, are stored hashed, and reuse of a rotated token revokes all of the user's sessions. Credential endpoints are rate limited per IP. See `backend/PRODUCTION.md` for the full security model.
+
+### `POST /api/auth/signup` / `POST /api/auth/login`
+Body `{ name?, email, password }` -> `201/200 { user, accessToken, refreshToken, expiresIn }`. Passwords are bcrypt-hashed; min 8 chars; emails unique case-insensitively (`409` on duplicates).
+
+### `POST /api/auth/refresh`
+`{ refreshToken }` -> new `{ user, accessToken, refreshToken, expiresIn }` (old refresh token revoked).
+
+### `POST /api/auth/logout`
+`{ refreshToken }` -> `204`; revokes the session (no access token required).
+
+### `GET /api/me` / `PATCH /api/me` / `POST /api/me/password`
+Current user, name update (`{ name }`), password change (`{ currentPassword, newPassword }` -> `204` + all refresh tokens revoked).
+
+### `GET /api/me/handles` / `PUT /api/me/handles`
+Server-side copy of the linked platform handles: `{ handles: { codechef: "...", ... } }`. `PUT` upserts non-empty values and deletes `null` ones; unlisted platforms are untouched.
+
+### `POST /api/me/import/codechef` / `GET /api/me/import/codechef`
+Queue (`202 { job }`, `409` while one is active, `400` without a linked CodeChef handle) / poll the CodeChef solution import for **the signed-in user's saved handle only**. Job: `{ status: queued|running|completed|failed, discovered, imported, sourceFetched, skipped, error }`. Discovery uses CodeChef's public recent-activity endpoint; source code is fetched through one env-configured service session (`viewplaintext`), throttled + capped per run, deduplicated against already-imported rows, with graceful metadata-only fallback. LeetCode source retrieval is intentionally not implemented.
+
+### `GET /api/me/submissions[?limit&offset]` / `GET /api/me/submissions/:id`
+Imported submissions, newest first (metadata + `hasSource`); the detail route includes `sourceCode`. Strictly scoped to the authenticated user.
+
 ## Environment
 
 | Var | Purpose |
 |---|---|
 | `PORT` | default 3000 |
 | `CLIST_USERNAME` / `CLIST_API_KEY` | CLIST v4 credentials (get from clist.by -> API) |
+| `DATABASE_URL` | PostgreSQL connection string (enables accounts) |
+| `JWT_SECRET` | 32+ char access-token signing secret |
+| `CORS_ORIGINS` | comma-separated browser origin allowlist (production) |
+| `CODECHEF_SESSION_COOKIES` / `CODECHEF_CSRF_TOKEN` | service session for source fetches (secret manager only) |
+| `CODECHEF_FETCH_THROTTLE_MS` etc. | import politeness knobs - see `backend/.env.example` |
 
 ## Caching summary
 

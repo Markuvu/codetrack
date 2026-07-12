@@ -25,6 +25,9 @@ The app **never talks to the platforms directly**. Everything goes through the b
 - `src/services/*.js` - one module per data source, each exporting `get<X>Profile(handle)` returning a normalized object
 - `src/services/snapshots.js` - records a daily snapshot on every fresh profile fetch (for progress graphs/streaks)
 - `src/services/clist.js` - upcoming contests via CLIST v4, with a Codeforces-API fallback
+- `src/db/` - PostgreSQL pool, migration runner (`npm run migrate`, `migrations/*.sql`) and repositories (users, refresh tokens, handles, submissions, import jobs)
+- `src/auth/` - bcrypt password hashing, JWT access tokens, rotating hashed refresh tokens, auth routes + middleware
+- `src/routes/me.js` - authenticated per-user routes; `src/services/codechefSolutions.js` + `importer.js` - CodeChef solution import (see `backend/PRODUCTION.md`)
 
 **Cache TTLs:** profiles 6h, contests 3h, recent-solved 1h, logos 7d (in-memory) + `Cache-Control: max-age=86400` for clients.
 
@@ -35,7 +38,7 @@ The app **never talks to the platforms directly**. Everything goes through the b
 | Folder | Contents |
 |---|---|
 | `models/` | `PlatformProfile`, `Contest`, `Flashcard` |
-| `services/` | `api_client.dart` (HTTP; backend URL stored in prefs, default `http://10.0.2.2:3000`), `notification_service.dart`, `auth_service.dart` |
+| `services/` | `api_client.dart` (HTTP; backend URL stored in prefs, default `http://10.0.2.2:3000`; authed `/api/me` helpers), `notification_service.dart`, `auth_service.dart` (server-backed auth; tokens in secure storage) |
 | `storage/` | `app_store.dart` - shared_preferences wrapper (`handles`, `flashcards`, `friends_<platform>`, `scheduled_reminders`) |
 | `logic/` | `fsrs.dart`, `sm2.dart` spaced-repetition schedulers |
 | `screens/` | `dashboard`, `contests`, `progress`, `flashcards`, `leaderboard` (Friends), `settings`, `auth` |

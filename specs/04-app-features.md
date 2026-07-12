@@ -2,12 +2,14 @@
 
 State of the Flutter app as of v0.4.x (July 2026).
 
-## Auth (local-only)
+## Auth (server-backed)
 
-- Combined **login / signup** screen shown before the app when logged out (`auth_screen.dart`); defaults to login if an account exists on the device
-- Password stored as salted SHA-256 (`sha256('$salt:$password')`, random 16-byte salt); never in plain text
-- Settings -> Account: edit **Name**, view email, **Change password** (re-salts), **Log out**
-- Account lives only on this device - no recovery, no sync (see `05` #9)
+- Combined **login / signup** screen shown before the app when logged out (`auth_screen.dart`); defaults to login if this device signed in before
+- Accounts live on the backend (PostgreSQL, bcrypt hashes); the app holds a short-lived JWT access token + rotating refresh token in **platform secure storage** (Keystore/Keychain via `flutter_secure_storage`), never SharedPreferences
+- Name/email are cached in SharedPreferences **for display only**; tokens refresh transparently in `AuthService.accessToken()`
+- Settings -> Account: edit **Name** (synced to server), view email, **Change password** (revokes all sessions, re-logs-in this device), **Log out** (revokes the refresh token)
+- Settings -> CodeChef solutions: trigger/poll the server-side import of the linked CodeChef handle's submissions and browse imported source code (`submissions_screen.dart`)
+- Linked handles are mirrored to `/api/me/handles` (best-effort two-way merge on dashboard load; local copy keeps working offline)
 
 ## Dashboard (tab 1)
 
